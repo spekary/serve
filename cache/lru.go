@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// LruCache is a kind of LRU cache. Objects that are too old are removed, and if the cache is full,
+// LRU is a kind of LRU cache. Objects that are too old are removed, and if the cache is full,
 // the oldest item(s) will be removed. When an item is set more than once, it is pushed to the end so its last to be removed.
 // Limits are approximate, as garbage collecting will randomly happen. Also, in order to prevent memory thrashing, strict order is not
 // preserved, but items will fall out more or less in LRU order.
@@ -14,7 +14,7 @@ import (
 // If the item has a "Removed" function, that function will be called when the item falls out of the cache.
 // If the item has a "Cleanup" function, that function will be called when the item is removed from memory. If
 // the cache has a backing store, it may be removed from memory, but still in the disk-based cache.
-type LruCache struct {
+type LRU struct {
 	sync.Mutex
 	maxItemCount int
 	ttl          int64
@@ -40,15 +40,15 @@ type Cleanuper interface {
 	Cleanup()
 }
 
-// NewLruCache creates and returns a new cache.
+// NewLRU creates and returns a new cache.
 // maxItemCount is the maximum number of items the cache can hold.
 // ttl is the age in seconds past when items will be removed.
-func NewLruCache(maxItemCount int, ttlSeconds int64) *LruCache {
+func NewLRU(maxItemCount int, ttlSeconds int64) *LRU {
 	gci := maxItemCount / 8
 	if gci < 16 {
 		gci = 16
 	}
-	return &LruCache{
+	return &LRU{
 		maxItemCount: maxItemCount,
 		ttl:          ttlSeconds * (1000 * 1000 * 1000), // we compare against nanos
 		items:        make(map[string]lruItem),
@@ -56,12 +56,12 @@ func NewLruCache(maxItemCount int, ttlSeconds int64) *LruCache {
 	}
 }
 
-func (o *LruCache) SetGCInterval(interval int) {
+func (o *LRU) SetGCInterval(interval int) {
 	o.gcInterval = interval
 }
 
 // Set puts the item into the cache, and updates its access time
-func (o *LruCache) Set(key string, v interface{}) {
+func (o *LRU) Set(key string, v interface{}) {
 	if v == nil {
 		panic("Cannot put a nil pointer into the lru cache")
 	}
@@ -88,7 +88,7 @@ func (o *LruCache) Set(key string, v interface{}) {
 }
 
 // gc  does a garbage collection. Garbage collection requires significant time, so it is done in a go routine.
-func (o *LruCache) gc() {
+func (o *LRU) gc() {
 	o.Lock()
 	var keys []string
 	for k := range o.items {
@@ -133,7 +133,7 @@ func (o *LruCache) gc() {
 
 // Get returns the item based on its id, and updates its access time.
 // If not found, it will return nil.
-func (o *LruCache) Get(key string) interface{} {
+func (o *LRU) Get(key string) interface{} {
 	o.Lock()
 	i, ok := o.items[key]
 	if !ok {
@@ -147,7 +147,7 @@ func (o *LruCache) Get(key string) interface{} {
 }
 
 // Has tests for the existence of the key. It does not update the access time though.
-func (o *LruCache) Has(key string) (exists bool) {
+func (o *LRU) Has(key string) (exists bool) {
 	o.Lock()
 	_, ok := o.items[key]
 	o.Unlock()

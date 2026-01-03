@@ -4,7 +4,6 @@ go 1.25.4
 
 require (
 	github.com/alexedwards/scs/v2 v2.9.0
-	github.com/goradd/goradd v0.31.10
 	github.com/goradd/maps v1.2.0
 	github.com/stretchr/testify v1.11.0
 )

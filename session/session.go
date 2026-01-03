@@ -11,7 +11,6 @@ import (
 type sessionContext struct{}
 
 const sessionResetKey string = "goradd.reset"
-const timezoneKey string = "goradd.timezone"
 
 type sessionData = maps.SafeMap[string, interface{}]
 
@@ -171,5 +170,5 @@ func Reset(ctx context.Context) {
 }
 
 func init() {
-	gob.Register(&Session{}) // using name to avoid conflicts with 3rd party session handlers
+	gob.RegisterName("goraddSession", &Session{}) // using name to avoid conflicts with 3rd party session handlers
 }

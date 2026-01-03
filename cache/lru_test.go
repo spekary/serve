@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/strings"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +20,7 @@ func (r *removeTest) Removed() {
 }
 
 func TestBasicLruCache(t *testing.T) {
-	c := NewLruCache(100, 60*60)
+	c := NewLRU(100, 60*60)
 
 	p1 := "1"
 	p2 := "2"
@@ -45,7 +45,7 @@ func TestBasicLruCache(t *testing.T) {
 }
 
 func TestLruReplace(t *testing.T) {
-	c := NewLruCache(100, 60*60)
+	c := NewLRU(100, 60*60)
 
 	p1 := "1"
 	p2 := "2"
@@ -67,7 +67,7 @@ func TestLruReplace(t *testing.T) {
 }
 
 func TestTriggerGC(t *testing.T) {
-	c := NewLruCache(100, 60*60)
+	c := NewLRU(100, 60*60)
 	c.SetGCInterval(10)
 
 	for i := 0; i < 1000; i++ {
@@ -80,7 +80,7 @@ func TestTriggerGC(t *testing.T) {
 func TestRemover(t *testing.T) {
 	var r removeTest
 
-	c := NewLruCache(100, 60*60)
+	c := NewLRU(100, 60*60)
 	for i := 0; i < 1000; i++ {
 		s := strconv.Itoa(i)
 		r.i = i
@@ -89,7 +89,7 @@ func TestRemover(t *testing.T) {
 	c.gc()
 	assert.True(t, r.wasRemoved)
 
-	c = NewLruCache(100, 1)
+	c = NewLRU(100, 1)
 	r.wasRemoved = false
 
 	for i := 0; i < 50; i++ {
@@ -107,7 +107,7 @@ func TestRemover(t *testing.T) {
 }
 
 func TestLruCacheExit(t *testing.T) {
-	c := NewLruCache(1, 60*60)
+	c := NewLRU(1, 60*60)
 	p1 := "1"
 	p2 := "2"
 
@@ -129,7 +129,7 @@ func TestLruCacheExit(t *testing.T) {
 }
 
 func TestLruCacheTtl(t *testing.T) {
-	c := NewLruCache(10, 1)
+	c := NewLRU(10, 1)
 	p1 := "1"
 	p2 := "2"
 	p3 := "3"
@@ -161,7 +161,7 @@ func TestLruCacheTtl(t *testing.T) {
 }
 
 func TestLruReset(t *testing.T) {
-	c := NewLruCache(2, 60*60)
+	c := NewLRU(2, 60*60)
 	p1 := "1"
 	p2 := "2"
 	p3 := "3"
@@ -191,7 +191,7 @@ func TestLruReset(t *testing.T) {
 }
 
 func TestLruStress(t *testing.T) {
-	c := NewLruCache(1000, 1)
+	c := NewLRU(1000, 1)
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
@@ -211,16 +211,16 @@ func TestLruStress(t *testing.T) {
 }
 
 func TestLruStress2(t *testing.T) {
-	c := NewLruCache(1000, 1)
+	c := NewLRU(1000, 1)
 	addN(c, 1000)
 
 }
 
-func addN(c *LruCache, n int) {
+func addN(c *LRU, n int) {
 	var keys []string
 	for i := 0; i < n; i++ {
-		s := strings.RandomString(strings.AlphaAll, 10)
-		s2 := strings.RandomString(strings.AlphaAll, 5)
+		s := strings.RandomString(strings.AlphaNumeric, 10)
+		s2 := strings.RandomString(strings.AlphaNumeric, 5)
 		c.Set(s, s2)
 		keys = append(keys, s)
 	}
@@ -228,7 +228,7 @@ func addN(c *LruCache, n int) {
 	// stress re-adding the same items
 	for i := 0; i < n; i++ {
 		s := keys[i]
-		s2 := strings.RandomString(strings.AlphaAll, 5)
+		s2 := strings.RandomString(strings.AlphaNumeric, 5)
 		c.Set(s, s2)
 	}
 

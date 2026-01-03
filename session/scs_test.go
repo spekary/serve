@@ -11,11 +11,11 @@ import (
 func TestSetGet(t *testing.T) {
 	// setup the ScsSession
 	store := memstore.NewWithCleanupInterval(24 * time.Hour)
-	sm := scs.New()
-	sm.Store = store
-	SetSessionManager(NewScsManager(sm))
+	s := scs.New()
+	s.Store = store
+	sm := NewScsManager(s)
 
 	// run the session tests
-	runRequestTest(t, setRequestHandler(), testRequestHandler(t))
-	runRequestTest(t, setupStackRequestHandler(), testStackRequestHandler(t))
+	runRequestTest(t, setRequestHandler(sm), testRequestHandler(t, sm))
+	runRequestTest(t, setupStackRequestHandler(sm), testStackRequestHandler(t, sm))
 }

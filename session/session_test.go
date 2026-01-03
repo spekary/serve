@@ -15,8 +15,7 @@ func runRequestTest(t *testing.T, setupHandler, testHandler http.Handler) {
 	req := httptest.NewRequest("GET", "/", nil)
 	rec := httptest.NewRecorder()
 
-	h := Use(setupHandler)
-	h.ServeHTTP(rec, req)
+	setupHandler.ServeHTTP(rec, req)
 
 	if status := rec.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v, body: %v",
@@ -31,8 +30,7 @@ func runRequestTest(t *testing.T, setupHandler, testHandler http.Handler) {
 	rec = httptest.NewRecorder()
 	req.Header.Set("Cookie", cookie)
 
-	h = Use(testHandler)
-	h.ServeHTTP(rec, req)
+	testHandler.ServeHTTP(rec, req)
 }
 
 const intKey = "test.intKey"
@@ -40,23 +38,24 @@ const boolKey = "test.boolKey"
 const stringKey = "test.stringKey"
 const floatKey = "test.floatKey"
 
-func setRequestHandler() http.Handler {
+func setRequestHandler(sessionManager ManagerI) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
 		setupTest(ctx)
 	}
-	return http.HandlerFunc(fn)
+
+	return sessionManager.Use(http.HandlerFunc(fn))
 }
 
-func testRequestHandler(t *testing.T) http.Handler {
+func testRequestHandler(t *testing.T, sessionManager ManagerI) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
 		runTest(t, ctx)
 
 	}
-	return http.HandlerFunc(fn)
+	return sessionManager.Use(http.HandlerFunc(fn))
 }
 
 func setupTest(ctx context.Context) {

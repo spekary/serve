@@ -9,7 +9,7 @@ import (
 
 const stack = "test.stack"
 
-func setupStackRequestHandler() http.Handler {
+func setupStackRequestHandler(sessionManager ManagerI) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
@@ -22,10 +22,10 @@ func setupStackRequestHandler() http.Handler {
 		PushRoute(ctx, "There")
 		ClearRoutes(ctx)
 	}
-	return http.HandlerFunc(fn)
+	return sessionManager.Use(http.HandlerFunc(fn))
 }
 
-func testStackRequestHandler(t *testing.T) http.Handler {
+func testStackRequestHandler(t *testing.T, sessionManager ManagerI) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
@@ -37,5 +37,5 @@ func testStackRequestHandler(t *testing.T) http.Handler {
 
 		assert.Equal(t, "", PopRoute(ctx))
 	}
-	return http.HandlerFunc(fn)
+	return sessionManager.Use(http.HandlerFunc(fn))
 }

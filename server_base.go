@@ -6,10 +6,11 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/alexedwards/scs/v2/memstore"
-	"github.com/goradd/goradd/pkg/messageServer"
-	"github.com/goradd/goradd/pkg/messageServer/ws"
 	"github.com/goradd/serve/config"
 	http2 "github.com/goradd/serve/http"
+	"github.com/goradd/serve/messenger"
+	"github.com/goradd/serve/messenger/ws"
+	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/session"
 )
 
@@ -56,7 +57,7 @@ func (a *ServerBase) MakeHandler() http.Handler {
 	// These handlers are called in reverse order
 	h := http.NotFoundHandler() // Should go at the end of the chain to catch whatever is missed
 	h = http2.WithAppMuxer(h)   // Serves other dynamic files, and possibly the api
-	//	h = a.ServePageHandler(h)           // Serves the Goradd dynamic pages
+	h = a.WithPageHandler(h)    // Serves the Goradd dynamic pages
 	h = a.WithSession(h)
 	h = http2.WithBufferedOutput(h) // Must be in front of the session handler
 	//	h = a.StatsHandler(h)
@@ -123,7 +124,19 @@ func (a *ServerBase) SetupSessionManager() {
 // You can use this mechanism to set up your own messaging system for application use too.
 func (a *ServerBase) SetupMessenger() {
 	// The default sets up a websocket based messenger appropriate for development and single-server applications
-	messenger := new(ws.WsMessenger)
-	messageServer.Messenger = messenger
-	messenger.Start()
+	m := new(ws.WsMessenger)
+	messenger.Messenger = m
+	m.Start()
+}
+
+// WithPageHandler processes requests for data driven pages.
+func (a *ServerBase) WithPageHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if page.HasRoute(r.URL.Path) {
+			page.ServeHTTP(w, r)
+		} else {
+			next.ServeHTTP(w, r)
+		}
+	}
+	return http.HandlerFunc(fn)
 }

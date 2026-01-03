@@ -23,8 +23,7 @@ func NewScsManager(mgr *scs.SessionManager) ManagerI {
 	return ScsManager{mgr}
 }
 
-// Use is an http handler that wraps the session management process. It will get and put session data
-// into the http context.
+// Use inserts the ScsManager into the http handler stack.
 func (mgr ScsManager) Use(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var token string
