@@ -7,10 +7,11 @@ import (
 	"reflect"
 
 	"github.com/goradd/base"
-	"github.com/goradd/goradd/pkg/log"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
+	"github.com/goradd/serve/log"
 	"github.com/goradd/serve/page"
+	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
 )
 
@@ -278,7 +279,7 @@ func (c *ControlBase) doAction(ctx context.Context) {
 	}
 
 	if c.passesValidation(ctx, e) {
-		log.FrameworkDebug("doAction - triggered event: ", e.String())
+		log.Debug(ctx, logModule, "doAction - triggered event", "event", e.String())
 		if callbackAction := event.GetCallbackAction(e); callbackAction != nil {
 			cba := callbackAction.(action.CallbackActionAccessor)
 			p := action.NewActionParams(
@@ -286,20 +287,20 @@ func (c *ControlBase) doAction(ctx context.Context) {
 				cba.GetActionID(),
 				callbackAction,
 				c.ID(),
-				grCtx.actionValues,
+				request.ActionValues,
 			)
 
 			controlId := cba.GetDestinationControlID()
 			if controlId == action.DefaultControlId {
 				controlId = c.ID()
 			}
-			if c.Page().HasControl(controlId) {
-				dest := c.Page().GetControl(controlId)
+			if dest := c.form.GetControl(controlId); dest != nil {
 				if isPrivate {
-					if log.HasLogger(log.FrameworkDebugLog) {
-						log.FrameworkDebugf("doAction - DoPrivateAction, DestId: %s, ActionId: %d, DoAction: %s, TriggerId: %s",
-							dest.ID(), p.ID, reflect.TypeOf(p.Action).String(), p.ControlId)
-					}
+					log.Debug(ctx, logModule, "doAction - DoPrivateAction",
+						"dest_id", dest.ID(),
+						"action_id", p.ID,
+						"action_type", reflect.TypeOf(p.Action).String(),
+						"trigger_id", p.ControlId)
 					dest.DoPrivateAction(ctx, p)
 				} else {
 					if log.HasLogger(log.FrameworkDebugLog) {
