@@ -97,3 +97,7 @@ func Debug(ctx context.Context, module string, msg string, args ...any) {
 		logger.DebugContext(ctx, msg, args)
 	}
 }
+
+func IsDebugging() bool {
+	return logger != nil && logger.Enabled(context.Background(), slog.LevelDebug)
+}

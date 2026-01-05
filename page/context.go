@@ -90,10 +90,10 @@ type RequestContext struct {
 
 	requestMode          RequestMode
 	pageStateId          string
-	actionControlID      string        // If an action, the control sending the action
+	ActionControlID      string        // If an action, the control sending the action
 	EventID              event.EventID // The event to send to the control
 	ActionValues         action.RawActionValues
-	refreshIDs           []string
+	RefreshIds           []string
 	hasTimezoneInfo      bool
 	clientTimezoneOffset int
 	clientTimezone       string
@@ -242,7 +242,7 @@ func processPageState(ctx context.Context, r *RequestContext) error {
 		r.requestMode = RequestModeServer
 		aId, _ := r.FormValue(HtmlVarAction)
 		parts := strings.Split(aId, "_")
-		r.actionControlID = parts[0]
+		r.ActionControlID = parts[0]
 		if len(parts) > 1 {
 			r.ActionValues.Control = []byte(parts[1])
 		}
@@ -290,14 +290,14 @@ func processPageParams(ctx context.Context, r *RequestContext, v string) error {
 	if !strings2.IsASCII(params.ControlID) {
 		return fmt.Errorf("invalid control id")
 	}
-	r.actionControlID = params.ControlID
+	r.ActionControlID = params.ControlID
 
 	for _, r := range params.RefreshIDs {
 		if !strings2.IsASCII(r) {
 			return fmt.Errorf("invalid control id")
 		}
 	}
-	r.refreshIDs = params.RefreshIDs
+	r.RefreshIds = params.RefreshIDs
 
 	if params.EventID != 0 {
 		// event ids are mapped, so no danger of out of bounds errors

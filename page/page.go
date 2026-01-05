@@ -6,14 +6,11 @@
 package page
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
-	"fmt"
+	"encoding/binary"
 	"io"
 	http2 "net/http"
 
-	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
 )
@@ -69,17 +66,14 @@ type Page struct {
 	renderStatus PageRenderStatus
 	idPrefix     string // For creating unique ids for the app
 
-	form           FormI
-	idCounter      int
-	title          string // page title to draw in head tag
-	htmlHeaderTags []html5tag.VoidTag
+	form      FormI
+	idCounter int
+	title     string // page title to draw in head tag. There can only be one title.
+	// base We do not use a base tag, because it can cause problems with anchor tag navigation and is hard to manage
+	htmlHeaderTags []string
 	responseError  int
 
 	language int // Don't serialize this. This is a cached version of what the session holds.
-}
-
-// Init initializes the page. Should be called by a form just after creating Page.
-func (p *Page) Init() {
 }
 
 func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) {
@@ -102,10 +96,14 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 		if f == nil {
 			panic("form not found for path: " + path)
 		}
-		p.form = f(ctx, p)
+		p.form = f()
+		p.form.SetupNewForm(ctx, p)
 		p.Draw(ctx, w)
 	} else {
-		p.form.Run(ctx)
+		err = p.form.Run(ctx)
+		if err != nil {
+			return
+		}
 		if request.RequestMode() == RequestModeAjax {
 			p.DrawAjax(ctx, w)
 			w.Header().Add("Content-Type", "application/json")
@@ -151,7 +149,7 @@ func (p *Page) DrawHeaderTags(ctx context.Context, w io.Writer) {
 	// draw things like additional meta tags, etc
 	if p.htmlHeaderTags != nil {
 		for _, tag := range p.htmlHeaderTags {
-			if _, err := io.WriteString(w, tag.Render()); err != nil {
+			if _, err := io.WriteString(w, tag); err != nil {
 				panic(err)
 			}
 		}
@@ -192,84 +190,95 @@ func (p *Page) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// AppendBinary is called by the framework to serialize the page state.
+func (p *Page) AppendBinary(b []byte) (data []byte, err error) {
+	b = binary.LittleEndian.AppendUint32(b, uint32(PageCacheVersion))
+	b = binary.LittleEndian.AppendUint32(b, uint32(p.idCounter))
+	b = EncodeString(b, p.stateId)
+	b = EncodeString(b, p.idPrefix)
+	b = EncodeString(b, p.title)
+	b = EncodeStringSlice(b, p.htmlHeaderTags)
+	b = EncodeString(b, p.BodyAttributes)
+
+	if p.form != nil {
+		b = EncodeString(b, p.form.ID())
+	} else {
+		b = EncodeString(b, "")
+	}
+	/*
+		b2 := bytes.NewBuffer(b)
+		enc := &GobSerializer{gob.NewEncoder(b2)}
+
+		encode the registry
+
+	*/
+	return b, nil
+}
+
 // MarshalBinary is called by the framework to serialize the page state.
 func (p *Page) MarshalBinary() (data []byte, err error) {
-	var buf bytes.Buffer
-	e := gob.NewEncoder(&buf)
-	if err = e.Encode(PageCacheVersion); err != nil {
-		return
-	}
-	if err = e.Encode(p.stateId); err != nil {
-		return
-	}
-	if err = e.Encode(p.idPrefix); err != nil {
-		return
-	}
-	if err = e.Encode(p.title); err != nil {
-		return
-	}
-	if err = e.Encode(p.htmlHeaderTags); err != nil {
-		return
-	}
-	if err = e.Encode(p.BodyAttributes); err != nil {
-		return
-	}
-	if err = e.Encode(p.form); err != nil {
-		return
-	}
+	data, err = p.AppendBinary(nil)
+	return
+}
 
-	data = buf.Bytes()
+// ReadBinary reverses AppendBinary, returning the number of bytes consumed, and
+// io.ErrUnexpectedEOF if data is not big enough to hold a page.
+func (p *Page) ReadBinary(b []byte) (n int, err error) {
+	var n2 int
+
+	if len(b) < 4 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	_ = binary.LittleEndian.Uint32(b) // only one version at this point
+	n += 4
+
+	if len(b) < n+4 {
+		return n, io.ErrUnexpectedEOF
+	}
+	p.idCounter = int(binary.LittleEndian.Uint32(b[n:]))
+	n += 4
+
+	if p.stateId, n2, err = DecodeString(b[n:]); err != nil {
+		return
+	}
+	n += n2
+
+	if p.idPrefix, n2, err = DecodeString(b[n:]); err != nil {
+		return
+	}
+	n += n2
+
+	if p.title, n2, err = DecodeString(b[n:]); err != nil {
+		return
+	}
+	n += n2
+
+	if p.htmlHeaderTags, n2, err = DecodeStringSlice(b[n:]); err != nil {
+		return
+	}
+	n += n2
+
+	if p.BodyAttributes, n2, err = DecodeString(b[n:]); err != nil {
+		return
+	}
+	n += n2
+
+	// read the form id
+	// decode the registry
+	// get the form from the registry based on the form id
+	// set the form on all the controls
 	return
 }
 
 func (p *Page) UnmarshalBinary(data []byte) (err error) {
-	b := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(b)
-
-	var pageCacheVersion int32
-	if err = dec.Decode(&pageCacheVersion); err != nil {
-		panic(err)
-	}
-	if pageCacheVersion != PageCacheVersion {
-		return fmt.Errorf("stale data in cache") // This is a soft error indicating that the system should create a new page state
-	}
-
-	if err = dec.Decode(&p.stateId); err != nil {
-		panic(err)
-
-	}
-	if err = dec.Decode(&p.idPrefix); err != nil {
-		panic(err)
-	}
-	if err = dec.Decode(&p.title); err != nil {
-		panic(err)
-	}
-	if err = dec.Decode(&p.htmlHeaderTags); err != nil {
-		panic(err)
-	}
-	if err = dec.Decode(&p.BodyAttributes); err != nil {
-		panic(err)
-	}
-	if err = dec.Decode(&p.form); err != nil {
-		panic(err)
-	}
-
+	_, err = p.ReadBinary(data)
 	return
 }
 
 // AddHtmlHeaderTag adds the given tag to the head section of the page.
-func (p *Page) AddHtmlHeaderTag(t html5tag.VoidTag) {
+// Use a tag builder to build the tag into a string.
+func (p *Page) AddHtmlHeaderTag(t string) {
 	p.htmlHeaderTags = append(p.htmlHeaderTags, t)
-}
-
-func (p *Page) HasMetaTag(name string) bool {
-	for _, t := range p.htmlHeaderTags {
-		if t.Tag == "meta" &&
-			t.Attr["name"] == name {
-			return true
-		}
-	}
-	return false
 }
 
 // PushRedraw will cause the form to refresh in between events. This will cause the client to pull
@@ -299,7 +308,7 @@ func (p *Page) Cleanup() {
 	p.Form().Cleanup()
 }
 
-// Restore is called immediately after the page has been deserialized, to fix up decoded controls.
-func (p *Page) Restore() {
-	p.Form().Restore()
+// Unmarshalled is called immediately after the page has been deserialized, to fix up decoded controls.
+func (p *Page) Unmarshalled() {
+	p.Form().Unmarshalled()
 }

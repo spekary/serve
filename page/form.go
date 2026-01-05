@@ -9,11 +9,11 @@ import (
 type FormI interface {
 	ID() string
 	Init(ctx context.Context, f FormI, p *Page)
-	Run(ctx context.Context)
+	SetupNewForm(ctx context.Context, p *Page)
+	Run(ctx context.Context) error
 	Exit(ctx context.Context, w http2.ResponseWriter)
 
-	// functions after be restored from the cache
-	Restore()
+	Unmarshalled()
 	Cleanup()
 
 	PageDrawingFunction() PageDrawFunc

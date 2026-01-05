@@ -13,7 +13,7 @@ import (
 // Each action might contain one of three kinds of values:
 //
 //   - Action value, a value assigned to the action when it is created,
-//   - Control value, a value returned by certain custom controls
+//   - ControlBase value, a value returned by certain custom controls
 //   - Event value, a value assigned by certain event types
 //
 // Use the accessor functions like [Params.ActionValueInt] or [Params.ControlValueString] to extract an appropriately
@@ -171,7 +171,7 @@ func (a *Params) ActionValueBool() bool {
 func (a *Params) ControlValueString() string {
 	if !strings2.IsUTF8Bytes(a.values.Event) {
 		// OWASP Quick Reference #3-6
-		log.Info(nil, "action", "Control value is not UTF-8")
+		log.Info(nil, "action", "ControlBase value is not UTF-8")
 		return ""
 	}
 	v := string(a.values.Control)

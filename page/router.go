@@ -8,7 +8,7 @@ import (
 	"github.com/goradd/serve/log"
 )
 
-type FormCreateFunc func(context.Context, *Page) FormI
+type FormCreateFunc func() FormI
 
 var routes = make(map[string]FormCreateFunc) // maps paths to form info
 
@@ -89,6 +89,5 @@ func getPage(ctx context.Context) (page *Page) {
 	page = new(Page)
 	pageStateId = pageCache.NewPageID()
 	page.stateId = pageStateId
-	page.Init()
 	return
 }

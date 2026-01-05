@@ -115,11 +115,11 @@ func (o *SerializedPagestateCache) Set(pageId string, page *Page) {
 		o.testPage = page
 		return
 	}
-
 	if b, err := page.MarshalBinary(); err == nil {
 		o.LRU.Set(pageId, b)
 		log.FrameworkDebug("Write page to cache: ", pageId)
 	}
+	// what to do with error?
 }
 
 // Get returns the page based on its page id.
@@ -139,7 +139,6 @@ func (o *SerializedPagestateCache) Get(pageId string) *Page {
 
 	var p Page
 
-	// write over the top of the previous page to reuse the memory
 	if err := p.UnmarshalBinary(b.([]byte)); err != nil {
 		if config.Debug {
 			panic("Page unmarshal error: " + err.Error())
@@ -152,7 +151,7 @@ func (o *SerializedPagestateCache) Get(pageId string) *Page {
 	if p.stateId != pageId {
 		panic("pageId does not match") // or return nil?
 	}
-	p.Restore()
+	p.Unmarshalled()
 	return &p
 }
 

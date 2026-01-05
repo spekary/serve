@@ -67,6 +67,7 @@ func (a *ServerBase) MakeHandler() http.Handler {
 	h = http2.WithHeaderValidator(h)
 	h = http2.WithErrorHandler(h) // Default http error handler to intercept panics.
 	h = a.WithHsts(h)
+	// h = a.this().PressureRejector(h)	// Responds with 503 if memory is low
 	//	h = a.this().AccessLogHandler(h)
 
 	return h

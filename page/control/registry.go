@@ -1,57 +1,95 @@
 package control
 
 import (
-	"strconv"
+	"fmt"
+	"hash/fnv"
+	"reflect"
 )
 
-const defaultPrefix = "c"
+type CreateFunc func() ControlI
 
-type register interface {
-	generateId() string
-	registerControl(c ControlI)
-	RegisteredControl(id string) (c ControlI)
-}
+// RegistrySalt is used to generate unique ids in the control registry. However, if the control registry
+// detects a collision, you will need to change this value and restart your app. If you have a running
+// page cache, you should change the PageCacheVersion above as well to invalidate it.
+var RegistrySalt = "gs"
 
-// registry is a map of the controls that are associated with a
-type registry struct {
-	reg     map[string]ControlI
-	counter int
-	prefix  string
-}
+var registry = make(map[uint64]CreateFunc)
+var registryIds = make(map[reflect.Type]uint64)
 
-func (r *registry) SetGeneratedIdPrefix(prefix string) {
-	r.prefix = prefix
-}
-func (r *registry) generateId() string {
-	if r.prefix == "" {
-		r.prefix = defaultPrefix
+// Register registers the control for the serialize/deserialize process. You should call this
+// for each control from an init() function. Pass in a function that will call new on your control
+// type and that is all.
+//
+// Example:
+//
+//	init() {
+//	  control.Register(func() control.ControlI {return new(MyControl)})
+//	}
+func Register(f CreateFunc) {
+	// As a control is added to the registry, it is assigned an id. That id is used to identify a control
+	// in the serialization and deserialization process.  We try to prevent the
+	// addition of controls to an application from causing a change in these ids, since an id change will
+	// also cause the current page cache to be invalidated. We use a hashing function, and a collision detector
+	// to do that. If a collision is detected, it will panic, and you should change the hash salt and try again,
+	// as well as bump the cache version to invalidate the cache.
+
+	i := f()
+	typ := reflect.TypeOf(i)
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
 	}
-	var id string
-	// append integer to prefix and confirm it is not already in the registry
-	for {
-		id = r.prefix
-		// Convert string to byte slice
-		buf := []byte(id)
-		// Append integer directly to the buffer (base 10)
-		r.counter++
-		buf = strconv.AppendInt(buf, int64(r.counter), 10)
-		// Convert back to string
-		id = string(buf)
-		if _, ok := r.reg[id]; !ok {
-			break
+
+	if _, ok := registryIds[typ]; ok {
+		panic("Registering duplicate control")
+	}
+	hash := fnv.New64()
+	n := typ.Name()
+	if n == "" {
+		panic("type problem")
+	}
+	_, _ = hash.Write([]byte(RegistrySalt))
+	_, _ = hash.Write([]byte(typ.PkgPath()))
+	_, _ = hash.Write([]byte(n))
+	id := hash.Sum64()
+	if f, ok := registry[id]; ok {
+		typ2 := reflect.TypeOf(f())
+		for typ2.Kind() == reflect.Ptr {
+			typ2 = typ2.Elem()
 		}
+
+		panic("The control registry has detected a collision. " +
+			typ2.Name() + " has collided with " + typ.Name() + ". " +
+			"This is a very rare situation, but needs " +
+			"to be fixed. To fix it, change the RegistrySalt value, and also change the " +
+			"PageCacheVersionID")
+	}
+	registry[id] = f
+	registryIds[typ] = id
+}
+
+func registryId(i ControlI) uint64 {
+	typ := i.TypeOf()
+	id, ok := registryIds[typ]
+	if !ok {
+		panic("ControlBase type is not registered: " + typ.String())
 	}
 	return id
 }
 
-func (r *registry) registerControl(c ControlI) {
-	if r.reg == nil {
-		r.reg = make(map[string]ControlI)
+// Create registered control returns a new control that has  Base initialized but nothing else.
+func createRegisteredControl(registryID uint64) ControlI {
+	var f CreateFunc
+	var ok bool
+	if f, ok = registry[registryID]; !ok {
+		panic(fmt.Errorf("attempting to decode a control type that is not registered: %d", registryID))
 	}
-	r.reg[c.ID()] = c
+	c := f()
+	c.initBase(c)
+	return c
 }
 
-func (r *registry) RegisteredControl(id string) (c ControlI) {
-	c, _ = r.reg[id]
-	return
+func controlIsRegistered(i ControlI) bool {
+	typ := i.TypeOf()
+	_, ok := registryIds[typ]
+	return ok
 }

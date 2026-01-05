@@ -127,6 +127,8 @@ func OutputLen(ctx context.Context) int {
 type defaultBufferedOutputManager struct {
 }
 
+var bufferedOutputPool = pool.New(5<<10, 30<<10)
+
 // WithBufferedOutput is middleware that adds output buffering to the handler stack.
 // Output buffering lets you build the output over multiple write calls, but does not send
 // the output until writing is complete. If an error occurs, this lets you send a nice error message,
@@ -134,12 +136,13 @@ type defaultBufferedOutputManager struct {
 func WithBufferedOutput(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		// Set up the output buffer
-		outBuf := pool.GetBuffer()
+		b := bufferedOutputPool.Get()
+		outBuf := bytes.NewBuffer(b)
 		bwriter := &bufferedResponseWriter{w, outBuf, 0, false, 0}
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, bufferedOutputContext{}, bwriter)
 		r = r.WithContext(ctx)
-		defer pool.PutBuffer(outBuf)
+		defer func() { bufferedOutputPool.Put(outBuf.Bytes()) }()
 		next.ServeHTTP(bwriter, r)
 
 		if bwriter.code != 0 && bwriter.code != 200 {

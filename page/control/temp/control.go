@@ -95,7 +95,7 @@ type DataLoader interface {
 }
 
 // ControlI is the interface that all controls must support. The functions are implemented by the
-// Control methods. See the Control method implementation for a description of each method.
+// ControlBase methods. See the ControlBase method implementation for a description of each method.
 
 type ControlI interface {
 	base.BaseI
@@ -408,7 +408,7 @@ func (c *Control) SetTag(tag string) ControlI {
 // override it, be sure to also call this parent function as well.
 func (c *Control) DrawPreRender(ctx context.Context, w io.Writer) {
 	if c.wasRendered || c.isRendering {
-		panic(fmt.Sprintf("Control %s has already been drawn.", c.ID()))
+		panic(fmt.Sprintf("ControlBase %s has already been drawn.", c.ID()))
 	}
 
 	// Because we may be rerendering a parent control, we need to make sure all "child" controls are marked as NOT being on the form
@@ -426,7 +426,7 @@ func (c *Control) Draw(ctx context.Context, w io.Writer) {
 	c.this().DrawPreRender(ctx, w)
 
 	if page.GetRequest(ctx).RequestMode() != page.RequestModeAjax {
-		if _, err := fmt.Fprintf(w, "<!-- Control Type:%s, Id:%s -->\n", c.TypeOf(), c.ID()); err != nil {
+		if _, err := fmt.Fprintf(w, "<!-- ControlBase Type:%s, Id:%s -->\n", c.TypeOf(), c.ID()); err != nil {
 			panic(err)
 		}
 	}
@@ -1501,18 +1501,18 @@ func (c *Control) readState(ctx context.Context) {
 
 /* I think to do this you would just reset the control itself.
 
-func (c *Control) ResetSavedState(ctx context.Context) {
+func (c *ControlBase) ResetSavedState(ctx context.Context) {
 	c.resetState(ctx)
 }
 
-func (c *Control) resetState(ctx context.Context) {
+func (c *ControlBase) resetState(ctx context.Context) {
 	var stateStoreType *maps.StdMap
 	var ok bool
 
 	if c.shouldSaveState {
 		i := session.Get(ctx, sessionControlStates)
 		if stateStoreType, ok = i.(*maps.StdMap); ok {
-			key := c.ParentForm().ID() + ":" + c.ID()
+			key := c.Form().ID() + ":" + c.ID()
 			stateStoreType.Set(key, nil) // we need to notify writeState to remove it, or writeState will just stomp on it
 		}
 	}

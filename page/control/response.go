@@ -17,7 +17,7 @@ const (
 	ResponseCommandsMedium = "commands"
 	ResponseCommandsLow    = "commandsLow"
 	ResponseCommandsFinal  = "commandsFinal"
-	ResponseRegC           = "regc" // register control list
+	ResponseRegC           = "regc" // cacher control list
 	ResponseHtml           = "html"
 	ResponseValue          = "value"
 	ResponseId             = "id"
