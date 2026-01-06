@@ -1,11 +1,5 @@
 package page
 
-import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-)
-
 /*
 import (
 	"bytes"
@@ -23,7 +17,7 @@ func TestEmptyFormEncoding(t *testing.T) {
 	var form = page.FormBase{}
 	var b bytes.Buffer
 
-	gob.Register(&form) // register form here, since we normally would never register the FormBase
+	gob.RegisterControl(&form) // register form here, since we normally would never register the FormBase
 	form.Init(nil, &form, "", "TestForm")
 
 
@@ -87,67 +81,3 @@ func TestBasicFormEncoding(t *testing.T) {
 
 
 */
-
-func TestEncodeString(t *testing.T) {
-	type args struct {
-		b []byte
-		s string
-	}
-	tests := []struct {
-		name string
-		s    string
-	}{
-		{"Encode empty string", ""},
-		{"Encode one char string", "a"},
-		{"Encode multi char string", "abcdef"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var b []byte
-			b = EncodeString(b, tt.s)
-			s2, n, err := DecodeString(b)
-			assert.NoError(t, err)
-			assert.Equal(t, len(b), n)
-			assert.Equal(t, tt.s, s2)
-		})
-	}
-
-	// generate error
-	var b []byte
-	b = EncodeString(b, "abcdefg")
-	b = b[:5]
-	_, _, err := DecodeString(b)
-	assert.Error(t, err)
-}
-
-func TestEncodeStringSlice(t *testing.T) {
-	type args struct {
-		b  []byte
-		ss []string
-	}
-	tests := []struct {
-		name string
-		ss   []string
-	}{
-		{"Encode empty string slice", nil},
-		{"Encode one item", []string{"a"}},
-		{"Encode muliple items", []string{"", "b", "cde"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var b []byte
-			b = EncodeStringSlice(b, tt.ss)
-			ss2, n, err := DecodeStringSlice(b)
-			assert.NoError(t, err)
-			assert.Equal(t, len(b), n)
-			assert.Equal(t, tt.ss, ss2)
-		})
-	}
-
-	// generate error
-	var b []byte
-	b = EncodeStringSlice(b, []string{"abcdefg"})
-	b = b[:5]
-	_, _, err := DecodeStringSlice(b)
-	assert.Error(t, err)
-}

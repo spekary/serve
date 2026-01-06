@@ -1,21 +1,22 @@
-package control
+package page
 
 import (
 	"iter"
 
 	"github.com/goradd/serve/log"
-	"github.com/goradd/serve/page"
 	"golang.org/x/exp/slices"
 )
 
 type treeNoder interface {
 	ID() string
 	Detach()
-	SetParent(newParent treeNoder) bool
-	Parent() ControlI
-	Children() iter.Seq[ControlI]
-	AllChildren() iter.Seq[ControlI]
+	SetParentControl(newParent treeNoder) bool
+	ParentControl() ControlI
+	ChildControls() iter.Seq[ControlI]
+	AllChildControls() iter.Seq[ControlI]
 	Form() FormI
+	HasChildControls() bool
+	FindChildControl(id string) ControlI
 
 	childIDs() []string
 	parentID() string
@@ -40,11 +41,11 @@ type treeNode struct {
 func (t *treeNode) Init(self ControlI, form FormI, parent treeNoder, id string) {
 	t.form = form
 	if id == "" {
-		id = t.form.generateId()
+		id = t.form.GenerateId()
 	}
 	t.id = id
-	form.cacheControl(self)
-	t.SetParent(parent)
+	form.addControl(self)
+	t.SetParentControl(parent)
 }
 
 func (t *treeNode) ID() string {
@@ -56,15 +57,15 @@ func (t *treeNode) Form() FormI {
 	return t.form
 }
 
-// Parent returns the parent control, or nil if this has no parent.
-func (t *treeNode) Parent() ControlI {
+// ParentControl returns the parent control, or nil if this has no parent.
+func (t *treeNode) ParentControl() ControlI {
 	return t.form.GetControl(t.parentId)
 }
 
-// SetParent changes the parent of the node to newParent.
-// If the node is already in the tree, will remove it from its sibling list.
+// SetParentControl changes the parent control of the control node to newParent.
+// If the control is already in the tree, will remove it from its sibling list.
 // Returns true if data changed.
-func (t *treeNode) SetParent(newParent treeNoder) bool {
+func (t *treeNode) SetParentControl(newParent treeNoder) bool {
 	if newParent == nil {
 		if t.parentId == "" {
 			// no change to parent, already has no parent
@@ -83,19 +84,32 @@ func (t *treeNode) SetParent(newParent treeNoder) bool {
 	return true
 }
 
-// Detach removes the item from its parent.
-// After this call, the item is still in the control cache, so it is still available for use, but you
-// should remember its id so you can get it from the cache again in the future.
+// Detach removes the item from its parent control.
+// After this call, the item is still in the control controlCache, so it is still available for use, but you
+// should remember its id so you can get it from the controlCache again in the future.
 func (t *treeNode) Detach() {
 	parentNode := t.parentNode()
 	if parentNode == nil {
 		if t.parentId != "" {
-			log.Debug(nil, logModule, "Parent node is missing")
+			log.Debug(nil, logModule, "ParentControl node is missing")
 		}
 		return
 	}
 	parentNode.removeChild(t)
 	t.parentId = ""
+}
+
+func (t *treeNode) HasChildControls() bool {
+	return len(t.childIds) > 0
+}
+
+func (t *treeNode) FindChildControl(id string) ControlI {
+	for _, cid := range t.childIds {
+		if cid == id {
+			return t.form.GetControl(id)
+		}
+	}
+	return nil
 }
 
 func (t *treeNode) parentNode() treeNoder {
@@ -123,13 +137,13 @@ func (t *treeNode) removeChild(child treeNoder) {
 	})
 }
 
-// Children returns an iterator that yields every immediate child control.
-func (t *treeNode) Children() iter.Seq[ControlI] {
+// ChildControls returns an iterator that yields every immediate child control.
+func (t *treeNode) ChildControls() iter.Seq[ControlI] {
 	return func(yield func(ControlI) bool) {
 		for _, id := range t.childIds {
 			child := t.form.GetControl(id)
 			if child == nil {
-				continue // Skip if child was removed from cache
+				continue // Skip if child was removed from controlCache
 			}
 			if !yield(child) {
 				return
@@ -138,15 +152,15 @@ func (t *treeNode) Children() iter.Seq[ControlI] {
 	}
 }
 
-// AllChildren returns an iterator that recursively yields every child control and
+// AllChildControls returns an iterator that recursively yields every child control and
 // subchild of the control.
-func (t *treeNode) AllChildren() iter.Seq[ControlI] {
+func (t *treeNode) AllChildControls() iter.Seq[ControlI] {
 	return func(yield func(ControlI) bool) {
-		for child := range t.Children() {
+		for child := range t.ChildControls() {
 			if !yield(child) {
 				return
 			}
-			for child2 := range child.AllChildren() {
+			for child2 := range child.AllChildControls() {
 				if !yield(child2) {
 					return
 				}
@@ -155,7 +169,7 @@ func (t *treeNode) AllChildren() iter.Seq[ControlI] {
 	}
 }
 
-func (t *treeNode) serialize(e page.Encoder) {
+func (t *treeNode) serialize(e Encoder) {
 	if err := e.Encode(t.id); err != nil {
 		panic(err)
 	}
@@ -167,7 +181,7 @@ func (t *treeNode) serialize(e page.Encoder) {
 	}
 }
 
-func (t *treeNode) deserialize(d page.Decoder) {
+func (t *treeNode) deserialize(d Decoder) {
 	if err := d.Decode(&t.id); err != nil {
 		panic(err)
 	}

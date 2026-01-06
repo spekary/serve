@@ -1,4 +1,4 @@
-package control
+package page
 
 import (
 	"fmt"
@@ -8,30 +8,30 @@ import (
 
 type CreateFunc func() ControlI
 
-// RegistrySalt is used to generate unique ids in the control registry. However, if the control registry
+// ControlRegistrySalt is used to generate unique ids in the control controlRegistry. However, if the control controlRegistry
 // detects a collision, you will need to change this value and restart your app. If you have a running
-// page cache, you should change the PageCacheVersion above as well to invalidate it.
-var RegistrySalt = "gs"
+// page controlCache, you should change the PageCacheVersion above as well to invalidate it.
+var ControlRegistrySalt = "gs"
 
-var registry = make(map[uint64]CreateFunc)
-var registryIds = make(map[reflect.Type]uint64)
+var controlRegistry = make(map[uint64]CreateFunc)
+var controlRegistryIds = make(map[reflect.Type]uint64)
 
-// Register registers the control for the serialize/deserialize process. You should call this
+// RegisterControl registers the control for the serialize/deserialize process. Controls should call this
 // for each control from an init() function. Pass in a function that will call new on your control
 // type and that is all.
 //
 // Example:
 //
 //	init() {
-//	  control.Register(func() control.ControlI {return new(MyControl)})
+//	  control.RegisterControl(func() control.ControlI {return new(MyControl)})
 //	}
-func Register(f CreateFunc) {
-	// As a control is added to the registry, it is assigned an id. That id is used to identify a control
+func RegisterControl(f CreateFunc) {
+	// As a control is added to the controlRegistry, it is assigned an id. That id is used to identify a control
 	// in the serialization and deserialization process.  We try to prevent the
 	// addition of controls to an application from causing a change in these ids, since an id change will
-	// also cause the current page cache to be invalidated. We use a hashing function, and a collision detector
+	// also cause the current page controlCache to be invalidated. We use a hashing function, and a collision detector
 	// to do that. If a collision is detected, it will panic, and you should change the hash salt and try again,
-	// as well as bump the cache version to invalidate the cache.
+	// as well as bump the controlCache version to invalidate the controlCache.
 
 	i := f()
 	typ := reflect.TypeOf(i)
@@ -39,7 +39,7 @@ func Register(f CreateFunc) {
 		typ = typ.Elem()
 	}
 
-	if _, ok := registryIds[typ]; ok {
+	if _, ok := controlRegistryIds[typ]; ok {
 		panic("Registering duplicate control")
 	}
 	hash := fnv.New64()
@@ -47,29 +47,29 @@ func Register(f CreateFunc) {
 	if n == "" {
 		panic("type problem")
 	}
-	_, _ = hash.Write([]byte(RegistrySalt))
+	_, _ = hash.Write([]byte(ControlRegistrySalt))
 	_, _ = hash.Write([]byte(typ.PkgPath()))
 	_, _ = hash.Write([]byte(n))
 	id := hash.Sum64()
-	if f, ok := registry[id]; ok {
+	if f, ok := controlRegistry[id]; ok {
 		typ2 := reflect.TypeOf(f())
 		for typ2.Kind() == reflect.Ptr {
 			typ2 = typ2.Elem()
 		}
 
-		panic("The control registry has detected a collision. " +
+		panic("The control controlRegistry has detected a collision. " +
 			typ2.Name() + " has collided with " + typ.Name() + ". " +
 			"This is a very rare situation, but needs " +
-			"to be fixed. To fix it, change the RegistrySalt value, and also change the " +
+			"to be fixed. To fix it, change the ControlRegistrySalt value, and also change the " +
 			"PageCacheVersionID")
 	}
-	registry[id] = f
-	registryIds[typ] = id
+	controlRegistry[id] = f
+	controlRegistryIds[typ] = id
 }
 
 func registryId(i ControlI) uint64 {
 	typ := i.TypeOf()
-	id, ok := registryIds[typ]
+	id, ok := controlRegistryIds[typ]
 	if !ok {
 		panic("ControlBase type is not registered: " + typ.String())
 	}
@@ -80,7 +80,7 @@ func registryId(i ControlI) uint64 {
 func createRegisteredControl(registryID uint64) ControlI {
 	var f CreateFunc
 	var ok bool
-	if f, ok = registry[registryID]; !ok {
+	if f, ok = controlRegistry[registryID]; !ok {
 		panic(fmt.Errorf("attempting to decode a control type that is not registered: %d", registryID))
 	}
 	c := f()
@@ -90,6 +90,6 @@ func createRegisteredControl(registryID uint64) ControlI {
 
 func controlIsRegistered(i ControlI) bool {
 	typ := i.TypeOf()
-	_, ok := registryIds[typ]
+	_, ok := controlRegistryIds[typ]
 	return ok
 }

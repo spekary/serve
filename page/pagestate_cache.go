@@ -1,13 +1,14 @@
 package page
 
 import (
-	"github.com/goradd/goradd/pkg/config"
-	"github.com/goradd/goradd/pkg/log"
+	"bytes"
+
 	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/cache"
+	"github.com/goradd/serve/log"
 )
 
-// PagestateCacheI is the page cache interface. The PageCache saves and restores pages in between page
+// PagestateCacheI is the page controlCache interface. The PageCache saves and restores pages in between page
 // accesses by the user.
 type PagestateCacheI interface {
 	Set(pageId string, page *Page)
@@ -18,12 +19,12 @@ type PagestateCacheI interface {
 
 var pageCache PagestateCacheI
 
-// SetPagestateCache will set the page cache to the given object.
+// SetPagestateCache will set the page controlCache to the given object.
 func SetPagestateCache(c PagestateCacheI) {
 	pageCache = c
 }
 
-// GetPagestateCache returns the page cache. Used internally by goradd.
+// GetPagestateCache returns the page controlCache. Used internally by goradd.
 func GetPagestateCache() PagestateCacheI {
 	return pageCache
 }
@@ -32,22 +33,22 @@ func HasPage(pageStateId string) bool {
 	return pageCache.Has(pageStateId)
 }
 
-// FastPagestateCache is an in memory page cache that does no serialization and uses an LRU cache of page objects.
-// Objects that are too old are removed, and if the cache is full,
+// FastPagestateCache is an in memory page controlCache that does no serialization and uses an LRU controlCache of page objects.
+// Objects that are too old are removed, and if the controlCache is full,
 // the oldest item(s) will be removed. When a page is updated, it is moved to the top. Whenever an item is set,
-// we could potentially garbage collect. This cache can be used in a production environment if the
+// we could potentially garbage collect. This controlCache can be used in a production environment if the
 // application is guaranteed to only work on a single machine. If you want scalability, use a serializing
-// page cache that serializes directly to a database that is accessible from all instances of the app.
+// page controlCache that serializes directly to a database that is accessible from all instances of the app.
 type FastPagestateCache struct {
 	cache.LRU
 }
 
-// NewFastPageCache creates a new FastPagestateCache cache
+// NewFastPageCache creates a new FastPagestateCache controlCache
 func NewFastPageCache(maxEntries int, TTL int64) *FastPagestateCache {
 	return &FastPagestateCache{*cache.NewLRU(maxEntries, TTL)}
 }
 
-// Set puts the page into the page cache and updates its access time, pushing it to the end of the removal queue.
+// Set puts the page into the page controlCache and updates its access time, pushing it to the end of the removal queue.
 // Page must already be assigned a state ID. Use NewPageId to do that.
 func (o *FastPagestateCache) Set(pageId string, page *Page) {
 	o.LRU.Set(pageId, page)
@@ -68,7 +69,7 @@ func (o *FastPagestateCache) Get(pageId string) *Page {
 	return p
 }
 
-// Has tests to see if the given page id is in the page cache, without actually loading the page
+// Has tests to see if the given page id is in the page controlCache, without actually loading the page
 func (o *FastPagestateCache) Has(pageId string) bool {
 	return o.LRU.Has(pageId)
 }
@@ -82,12 +83,12 @@ func (o *FastPagestateCache) NewPageID() string {
 	return s
 }
 
-// SerializedPagestateCache is an in memory page cache that does serialization and uses an LRU cache of page objects.
-// Use the serialized page cache during development to ensure that you can eventually move your page cache to a database
+// SerializedPagestateCache is an in memory page controlCache that does serialization and uses an LRU controlCache of page objects.
+// Use the serialized page controlCache during development to ensure that you can eventually move your page controlCache to a database
 // or a separate machine so that your application is scalable.
 //
 // This also uses an in memory, non-serialized map to keep the pages in memory so that the testing harness
-// can perform browser-based tests. Essentially this cache should only be used for development purposes
+// can perform browser-based tests. Essentially this controlCache should only be used for development purposes
 // and not production.
 type SerializedPagestateCache struct {
 	cache.LRU
@@ -115,11 +116,12 @@ func (o *SerializedPagestateCache) Set(pageId string, page *Page) {
 		o.testPage = page
 		return
 	}
-	if b, err := page.MarshalBinary(); err == nil {
-		o.LRU.Set(pageId, b)
-		log.FrameworkDebug("Write page to cache: ", pageId)
-	}
-	// what to do with error?
+
+	var b bytes.Buffer
+	page.Serialize(&b)
+	// See warning at Set. We relinquish control of the buffer after calling Set.
+	o.LRU.Set(pageId, b.Bytes())
+	log.Debug(nil, logModule, "Write page to pagestate cache", "page_id", pageId)
 }
 
 // Get returns the page based on its page id.
@@ -130,32 +132,25 @@ func (o *SerializedPagestateCache) Get(pageId string) *Page {
 	}
 
 	b := o.LRU.Get(pageId)
-	log.FrameworkDebug("Get page from cache: ", pageId)
+	log.Debug(nil, logModule, "Geting page from pagestate cache", "page_id", pageId)
 
 	if b == nil {
-		log.FrameworkDebug("Page not found: ", pageId)
+		log.Debug(nil, logModule, "Page not found", "page_id", pageId)
 		return nil
 	}
 
 	var p Page
-
-	if err := p.UnmarshalBinary(b.([]byte)); err != nil {
-		if config.Debug {
-			panic("Page unmarshal error: " + err.Error())
-		} else {
-			log.FrameworkDebug("Page unmarshal error: ", err.Error())
-		}
-		return nil
-	}
+	buf := bytes.NewBuffer(b.([]byte))
+	p.Deserialize(buf)
 
 	if p.stateId != pageId {
 		panic("pageId does not match") // or return nil?
 	}
-	p.Unmarshalled()
+	p.Deserialized()
 	return &p
 }
 
-// Has returns true if the page with the given pageId is in the cache.
+// Has returns true if the page with the given pageId is in the controlCache.
 func (o *SerializedPagestateCache) Has(pageId string) bool {
 	if pageId == o.testPageID {
 		return true

@@ -40,9 +40,7 @@ const (
 
 const HtmlVarAction = "Goradd_Action"
 const HtmlVarPagestate = "Goradd__PageState"
-const HtmlVarApistate = "__ApiState"
 const htmlVarParams = "Goradd__Params"
-const HtmlCsrfToken = "Goradd__Csrf"
 
 // MultipartFormMax is the maximum size of a mult-part form that will be
 // stored in memory in bytes. This data is stored in the "Value" part of the multi-part form data.

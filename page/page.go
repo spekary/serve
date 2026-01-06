@@ -3,17 +3,21 @@
 //
 // To use the page package, you start by creating a form object, and then add controls to that form.
 // You also should add a drawing template to define additional html for the form.
+//
+// A form object should embed page.FormBase.
 package page
 
 import (
 	"context"
-	"encoding/binary"
+	"fmt"
 	"io"
 	http2 "net/http"
 
 	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
 )
+
+const logModule = "page"
 
 // PageRenderStatus keeps track of whether we are rendering the page or not
 type PageRenderStatus int
@@ -28,18 +32,13 @@ const (
 )
 
 // PageCacheVersion helps us keep track of when a change to the application changes the pagecache format. It is only needed
-// when serializing the pagecache. Some page cache stores may be difficult to invalidate the whole thing, so this lets
+// when serializing the pagecache. Some page controlCache stores may be difficult to invalidate the whole thing, so this lets
 // us invalidate old pagecaches individually. Feel free to bump this as needed, though you should use
 // a number after UserPageCacheVersion so there is no conflict with the goradd default.
 var PageCacheVersion int32 = 1
 
-// ControlRegistrySalt is used to generate unique ids in the control registry. However, if the control registry
-// detects a collision, you will need to change this value and restart your app. If you have a running
-// page cache, you should change the PageCacheVersion above as well to invalidate it.
-var ControlRegistrySalt = "234$sfbg"
-
 // UserPageCacheVersion is a version number you can use as a starting point if you want to keep
-// track of the page cache version yourself.
+// track of the page controlCache version yourself.
 const UserPageCacheVersion = 10000
 
 // PageDrawFunc is the type for the page drawing function.
@@ -58,18 +57,21 @@ const controlCode = "**grc**"
 // html, head and body tags, and includes the one Form object on the page. The page also maintains a record of all
 // the controls included on the form.
 type Page struct {
+	controlCache
+
 	// BodyAttributes contains the attributes that will be output with the body tag. It should be set before the
-	// form draws, like in the AddHeadTags function.
+	// page draws, like in the AddHeadTags function.
 	BodyAttributes string
 
-	stateId      string // Id in cache of the pagestate. Needs to be output by form.
+	stateId      string // Id in controlCache of the pagestate. Needs to be output by form.
 	renderStatus PageRenderStatus
 	idPrefix     string // For creating unique ids for the app
 
 	form      FormI
 	idCounter int
 	title     string // page title to draw in head tag. There can only be one title.
-	// base We do not use a base tag, because it can cause problems with anchor tag navigation and is hard to manage
+	// base We do not use a "base" header tag, because it can cause problems with anchor tag navigation and is hard to manage
+	charset        string // default is "utf-8"
 	htmlHeaderTags []string
 	responseError  int
 
@@ -86,7 +88,7 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 
 	request := GetRequest(ctx)
 
-	// cache the language tags so we only need to look them up once for every call
+	// controlCache the language tags so we only need to look them up once for every call
 	//p.language = i18n.SetDefaultLanguage(ctx, grCtx.Header.Get("accept-language"))
 
 	if p.form == nil {
@@ -112,7 +114,7 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 		}
 	}
 
-	p.Form().Exit(ctx, w)
+	p.form.Exit(ctx, w)
 
 	pageCache.Set(p.stateId, p)
 
@@ -145,6 +147,16 @@ func (p *Page) DrawHeaderTags(ctx context.Context, w io.Writer) {
 			panic(err)
 		}
 	}
+	cs := p.charset
+	if cs == "" {
+		cs = "utf-8"
+	}
+	if _, err := io.WriteString(w, fmt.Sprintf(`<meta charset="%s"/>`, cs)); err != nil {
+		panic(err)
+	}
+	if _, err := io.WriteString(w, "\n"); err != nil {
+		panic(err)
+	}
 
 	// draw things like additional meta tags, etc
 	if p.htmlHeaderTags != nil {
@@ -155,7 +167,7 @@ func (p *Page) DrawHeaderTags(ctx context.Context, w io.Writer) {
 		}
 	}
 
-	p.Form().DrawHeaderTags(ctx, w)
+	p.Form().DrawHeaderTags(ctx, w) // draw custom tags from the form, or form's template
 	return
 }
 
@@ -178,7 +190,7 @@ func (p *Page) StateID() string {
 // DrawAjax renders the page during an ajax call. Since the page itself is already rendered, it simply hands off this
 // responsibility to the form.
 func (p *Page) DrawAjax(ctx context.Context, w io.Writer) {
-	p.form.RenderAjax(ctx, w)
+	p.form.renderAjax(ctx, w)
 	return
 }
 
@@ -190,88 +202,92 @@ func (p *Page) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
-// AppendBinary is called by the framework to serialize the page state.
-func (p *Page) AppendBinary(b []byte) (data []byte, err error) {
-	b = binary.LittleEndian.AppendUint32(b, uint32(PageCacheVersion))
-	b = binary.LittleEndian.AppendUint32(b, uint32(p.idCounter))
-	b = EncodeString(b, p.stateId)
-	b = EncodeString(b, p.idPrefix)
-	b = EncodeString(b, p.title)
-	b = EncodeStringSlice(b, p.htmlHeaderTags)
-	b = EncodeString(b, p.BodyAttributes)
+// Serialize is called by the framework to serialize the page state.
+// Its starts the process by creating a new encoder and then passing that
+// encoder around to the controls to serialize themselves.
+func (p *Page) Serialize(w io.Writer) {
+	e := NewEncoderFunc(w)
 
-	if p.form != nil {
-		b = EncodeString(b, p.form.ID())
+	if err := e.Encode(PageCacheVersion); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.idCounter); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.stateId); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.idPrefix); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.title); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.htmlHeaderTags); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(p.BodyAttributes); err != nil {
+		panic(err)
+	}
+
+	if p.form == nil {
+		// for testing primarily
+		if err := e.Encode(""); err != nil {
+			panic(err)
+		}
 	} else {
-		b = EncodeString(b, "")
+		if err := e.Encode(p.form.ID()); err != nil {
+			panic(err)
+		}
 	}
-	/*
-		b2 := bytes.NewBuffer(b)
-		enc := &GobSerializer{gob.NewEncoder(b2)}
-
-		encode the registry
-
-	*/
-	return b, nil
+	p.controlCache.serialize(e)
 }
 
-// MarshalBinary is called by the framework to serialize the page state.
-func (p *Page) MarshalBinary() (data []byte, err error) {
-	data, err = p.AppendBinary(nil)
-	return
-}
+// Deserialize reverses Serialize.
+func (p *Page) Deserialize(r io.Reader) {
+	d := NewDecoderFunc(r)
 
-// ReadBinary reverses AppendBinary, returning the number of bytes consumed, and
-// io.ErrUnexpectedEOF if data is not big enough to hold a page.
-func (p *Page) ReadBinary(b []byte) (n int, err error) {
-	var n2 int
-
-	if len(b) < 4 {
-		return 0, io.ErrUnexpectedEOF
+	if err := d.Decode(&PageCacheVersion); err != nil {
+		panic(err)
 	}
-	_ = binary.LittleEndian.Uint32(b) // only one version at this point
-	n += 4
-
-	if len(b) < n+4 {
-		return n, io.ErrUnexpectedEOF
+	if err := d.Decode(&p.idCounter); err != nil {
+		panic(err)
 	}
-	p.idCounter = int(binary.LittleEndian.Uint32(b[n:]))
-	n += 4
+	if err := d.Decode(&p.stateId); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&p.idPrefix); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&p.title); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&p.htmlHeaderTags); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&p.BodyAttributes); err != nil {
+		panic(err)
+	}
 
-	if p.stateId, n2, err = DecodeString(b[n:]); err != nil {
+	var formId string
+	if err := d.Decode(&formId); err != nil {
+		panic(err)
+	}
+	p.controlCache.deserialize(d)
+
+	if formId == "" {
 		return
 	}
-	n += n2
-
-	if p.idPrefix, n2, err = DecodeString(b[n:]); err != nil {
-		return
+	c := p.controlCache.getControl(formId)
+	if c == nil {
+		panic("control not found")
 	}
-	n += n2
+	f := c.(FormI) // will panic if this isn't a form, so our recovery handler will deal with it.
 
-	if p.title, n2, err = DecodeString(b[n:]); err != nil {
-		return
+	// fix up all controls with additional info they need
+	for c2 := range p.controlCache.AllControls() {
+		c2.setForm(f)
 	}
-	n += n2
-
-	if p.htmlHeaderTags, n2, err = DecodeStringSlice(b[n:]); err != nil {
-		return
-	}
-	n += n2
-
-	if p.BodyAttributes, n2, err = DecodeString(b[n:]); err != nil {
-		return
-	}
-	n += n2
-
-	// read the form id
-	// decode the registry
-	// get the form from the registry based on the form id
-	// set the form on all the controls
-	return
-}
-
-func (p *Page) UnmarshalBinary(data []byte) (err error) {
-	_, err = p.ReadBinary(data)
 	return
 }
 
@@ -303,12 +319,9 @@ func (p *Page) LanguageCode() string {
 	return i18n.CanonicalValue(p.language)
 }
 
-// Cleanup is called by the page cache when the page is removed from memory.
-func (p *Page) Cleanup() {
-	p.Form().Cleanup()
-}
-
-// Unmarshalled is called immediately after the page has been deserialized, to fix up decoded controls.
-func (p *Page) Unmarshalled() {
-	p.Form().Unmarshalled()
+// Deserialized is called immediately after the page has been deserialized, to fix up decoded controls.
+func (p *Page) Deserialized() {
+	for c := range p.controlCache.AllControls() {
+		c.Deserialized()
+	}
 }

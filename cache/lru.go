@@ -60,7 +60,10 @@ func (o *LRU) SetGCInterval(interval int) {
 	o.gcInterval = interval
 }
 
-// Set puts the item into the cache, and updates its access time
+// Set puts the item into the cache, and updates its access time.
+// Warning! If this is a slice, map, or anything that is referenced, it will refer to
+// that resource. It does not copy. So do not put a buffer from a pool, or anything like that
+// which you will refer to later.
 func (o *LRU) Set(key string, v interface{}) {
 	if v == nil {
 		panic("Cannot put a nil pointer into the lru cache")

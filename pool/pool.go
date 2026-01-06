@@ -4,8 +4,12 @@
 // See Pool for particulars of the features of the default pool.
 //
 // Call pool.Get() to return a buffer from the common buffer pool, which is suitable for small, quick
-// buffering operations that you use and dispose of. To be safe, you should call
-// defer func() {pool.Put()}() immediately after getting a buffer.
+// buffering operations that you use and dispose of.
+// Call pool.Put(b) to return a buffer to a pool.
+// You can use defer to make sure a buffer ets returned to the pool, but it is not required,
+// since a buffer that is not returned is eventually just cleaned up.
+//
+// If you do call pool.Put with a defer, be sure to wrap it in a function wrapper.
 //
 // Example:
 //
@@ -49,10 +53,22 @@ func Get() []byte {
 //
 // Be very careful that you do not refer to the buffer after putting it back,
 // including using a slice of a buffer.
+//
 // Also, only put back buffers that you got earlier.
-// A good practice is to defer a call to Put immediately after you call Get.
-// If the buffer contains sensitive information, you should call clear(buf) before
-// returning it to the buffer pool.
+//
+// You can use defer to make sure a buffer its returned to the pool, but it is not required,
+// since a buffer that is not returned is eventually just cleaned up.
+//
+// If you do call pool.Put with a defer, be sure to wrap it in a function wrapper.
+//
+// Example:
+//
+//	{
+//	  b := pool.Get()
+//	  defer func() {pool.Put(b)} // the wrapper is important here in case b is reallocated via append.
+//	  // do buffer work here
+//	  b = append(b, mybytes...)
+//	}
 func Put(b []byte) {
 	BytePool.Put(b)
 }
@@ -64,14 +80,7 @@ func GetBuffer() *bytes.Buffer {
 	return bytes.NewBuffer(b)
 }
 
-// PutBuffer return the buffer to the buffer pool.
-// Typically, you should do this after a defer.
-// Example:
-//
-//	defer PutBuffer(buf)
-//
-// Note: As opposed to Put, you do not need to wrap PutBuffer in a func wrapper
-// because the buf owns the underlying memory and keeps track of reallocations.
+// PutBuffer returns the buffer to the buffer pool.
 func PutBuffer(buf *bytes.Buffer) {
 	BytePool.Put(buf.Bytes())
 }

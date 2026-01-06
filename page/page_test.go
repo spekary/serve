@@ -1,13 +1,14 @@
 package page
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPage_MarshalBinary(t *testing.T) {
+func TestPage_Serialize(t *testing.T) {
 	testPage := new(Page)
 	testPage.BodyAttributes = `class="test"`
 	testPage.stateId = `abcdefg`
@@ -16,12 +17,11 @@ func TestPage_MarshalBinary(t *testing.T) {
 	testPage.title = "My Title"
 	testPage.htmlHeaderTags = []string{`<meta bob="foo">`, `<meta name="mike">'`}
 
-	b, err := testPage.MarshalBinary()
-	assert.NoError(t, err)
-	assert.NotNil(t, b)
+	var b bytes.Buffer
+	assert.NotPanics(t, func() { testPage.Serialize(&b) })
 
 	page2 := new(Page)
-	err = page2.UnmarshalBinary(b)
-	assert.NoError(t, err)
+	assert.NotPanics(t, func() { page2.Deserialize(&b) })
+
 	assert.True(t, reflect.DeepEqual(testPage, page2))
 }

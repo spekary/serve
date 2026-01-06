@@ -1,21 +1,24 @@
-package control
+package page
 
 import (
 	"context"
+	"fmt"
+	"html"
 	"io"
 	"iter"
 	"reflect"
 
 	"github.com/goradd/base"
+	"github.com/goradd/goradd/pkg/config"
+	"github.com/goradd/goradd/pkg/stringmap"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
 	"github.com/goradd/serve/log"
-	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
+	"github.com/goradd/serve/page/javascript"
+	"github.com/goradd/serve/pool"
 )
-
-const logModule = "control"
 
 const sessionControlStates string = "goradd.controlStates"
 const sessionControlTypeState string = "goradd.controlType"
@@ -71,18 +74,18 @@ var DefaultCheckboxLabelDrawingMode = html5tag.LabelAfter
 // that can be customized on a per-control basis.
 type DataConnector interface {
 	// Refresh reads from the model, and puts it into the control
-	Refresh(i ControlI, model interface{})
+	Refresh(i ControlI, model any)
 	// Update reads data from the control, and puts it into the model
-	Update(i ControlI, model interface{})
+	Update(i ControlI, model any)
 	// Modifies returns true if the control has been changed such that it will modify its corresponding data
-	Modifies(i ControlI, model interface{}) bool
+	Modifies(i ControlI, model any) bool
 }
 
 // DataLoader is an optional interface that DataConnectors can use if they need to load data from the database
 // to present a choice of items to the user to select from. The Load method will be called whenever the entire control
 // gets redrawn.
 type DataLoader interface {
-	Load(ctx context.Context) []interface{}
+	Load(ctx context.Context) []any
 }
 
 // ControlI is the interface that all controls must support. The functions are implemented by the
@@ -92,10 +95,32 @@ type ControlI interface {
 	base.BaseI
 	treeNoder
 
-	UpdateFormValues(request *page.RequestContext)
+	Draw(ctx context.Context, w io.Writer)
+	DrawTag(context.Context, io.Writer)
+	DrawInnerHtml(context.Context, io.Writer)
+	DrawTemplate(context.Context, io.Writer) error
+	DrawPreRender(context.Context, io.Writer)
+	DrawPostRender(context.Context, io.Writer)
+	DrawAjax(ctx context.Context, response *Response)
+	DrawChildControls(ctx context.Context, w io.Writer)
+	DrawText(ctx context.Context, w io.Writer)
+	PutCustomScript(ctx context.Context, response *Response)
+	DrawingAttributes(context.Context) html5tag.Attributes
+	NeedsRefresh() bool
+	WasRendered() bool
+
+	UpdateFormValues(request *RequestContext)
 	IsDisabled() bool
 	IsOnPage() bool
 	Refresh()
+
+	SetActionValue(v any) ControlI
+	ActionValue() any
+	DoAction(ctx context.Context, a action.Params)
+	DoPrivateAction(ctx context.Context, a action.Params)
+	AddRenderScript(f string, params ...any)
+	AddRelatedRenderScript(id string, f string, params ...any)
+	WrapEvent(eventName string, selector string, eventJs string, options map[string]interface{}) string
 
 	Validate(ctx context.Context) bool
 	ValidationState() ValidationState
@@ -104,8 +129,9 @@ type ControlI interface {
 	ChildValidationChanged()
 	ResetValidation()
 
-	Serialize(e page.Encoder)
-	Deserialize(d page.Decoder)
+	Serialize(e Encoder)
+	Deserialize(d Decoder)
+	Deserialized()
 
 	// package private functions
 
@@ -117,12 +143,15 @@ type ControlI interface {
 	validateSelfAndSiblings(ctx context.Context) bool
 	validateSiblingsAndChildren(ctx context.Context) bool
 	resetValidationValues() (changed bool)
+	shouldAutoRenderValue() bool
+	markOnPage(v bool)
+	resetDrawingFlags()
 }
 
 type attributeScriptEntry struct {
-	id       string        // id of the object to execute the command on. This should be the id of the control, or a related html object.
-	f        string        // the  function to call
-	commands []interface{} // parameters to the function
+	id       string // id of the object to execute the command on. This should be the id of the control, or a related html object.
+	f        string // the  function to call
+	commands []any  // parameters to the function
 }
 
 // ControlBase is the basis for UI controls and widgets in GoRADD.
@@ -209,7 +238,7 @@ type ControlBase struct {
 	blockParentValidation bool
 
 	// actionValue is the value that will be provided as the ControlValue for any actions that are triggered by this control.
-	actionValue interface{}
+	actionValue any
 	// events are all the events added by the control user that the control might trigger
 	events eventMap
 	// eventCounter is used to generate a unique id for an event to help us route the event through the system.
@@ -249,12 +278,378 @@ func (c *ControlBase) initBase(self ControlI) {
 	c.Base.Init(self)
 }
 
+// DrawPreRender prepares the control for drawing.
+// If you override it, be sure to also call this function as well.
+func (c *ControlBase) DrawPreRender(ctx context.Context, w io.Writer) {
+	if c.wasRendered || c.isRendering {
+		panic(fmt.Sprintf("Control %s has already been drawn.", c.ID()))
+	}
+
+	// Because we may be rerendering a parent control, we need to make sure all "child" controls are marked as NOT being on the form
+	// before rendering it again.
+	for child := range c.ChildControls() {
+		child.markOnPage(false)
+	}
+
+	// Finally, let's specify that we have begun rendering this control
+	c.isRendering = true
+}
+
+func (c *ControlBase) Draw(ctx context.Context, w io.Writer) {
+	c.this().DrawPreRender(ctx, w)
+
+	if !config.Minify && GetRequest(ctx).RequestMode() != RequestModeAjax {
+		if _, err := fmt.Fprintf(w, "<!-- ControlBase Type:%s, Id:%s -->\n", c.TypeOf(), c.ID()); err != nil {
+			panic(err)
+		}
+	}
+
+	if c.isHidden {
+		// We are invisible, but not using a wrapper. This creates a problem, in that when we go visible, we do not know what to replace
+		// To fix this, we create an empty, invisible control in the place where we would normally draw
+		if _, err := fmt.Fprint(w, `<span id="`, c.this().ID(), `" style="display:none;" data-grctl></span>`, "\n"); err != nil {
+			panic(err)
+		}
+	} else {
+		c.this().DrawTag(ctx, w)
+	}
+
+	response := c.form.Response()
+	c.this().PutCustomScript(ctx, response)
+	c.GetActionScripts(response)
+	c.this().DrawPostRender(ctx, w)
+	return
+}
+
+// DrawAjax is responsible for rendering the control during an ajax call.
+//
+// Some objects automatically render their child objects, and some don't,
+// so we detect whether the parent is being rendered, and assume the parent is taking care of rendering for
+// us if so.
+//
+// Override if you want more control over ajax drawing, like if you detect parts of your control that have changed
+// and then want to draw only those parts. This will get called on every control on every ajax draw request.
+// It is up to you to test the blnRendered flag of the control to know whether the control was already rendered
+// by a parent control before drawing here.
+func (c *ControlBase) DrawAjax(ctx context.Context, response *Response) {
+
+	if c.this().NeedsRefresh() {
+		// simply re-render the control and assume rendering will handle rendering its children
+
+		func() {
+			// wrap in a function to get deferred PutBuffer to execute immediately after drawing
+			buf := pool.GetBuffer()
+			c.this().Draw(ctx, buf)
+			response.SetControlHtml(c.ID(), buf.String())
+			pool.PutBuffer(buf) // If this doesn't happen because of a panic, that is fine
+		}()
+	} else {
+		// add attribute changes
+		if c.attributeScripts != nil {
+			for _, entry := range c.attributeScripts {
+				response.ExecuteControlCommand(entry.id, entry.f, entry.commands...)
+			}
+			c.attributeScripts = nil
+		}
+
+		// ask the child controls to potentially render, since this control doesn't need to
+		for child := range c.ChildControls() {
+			if child.IsOnPage() || child.shouldAutoRenderValue() {
+				child.DrawAjax(ctx, response)
+			}
+		}
+	}
+	return
+}
+
+// DrawPostRender is called by the framework at the end of drawing, and is the place where controls
+// do any post-drawing cleanup needed.
+func (c *ControlBase) DrawPostRender(ctx context.Context, w io.Writer) {
+	// Update watcher
+	//if ($This->objWatcher) {
+	//$This->objWatcher->makeCurrent();
+	//}
+
+	c.isRendering = false
+	c.wasRendered = true
+	c.isOnPage = true
+	c.needsRefresh = false
+	c.attributeScripts = nil // Entire control was redrawn, so don't need these
+	return
+}
+
+// DrawTag is responsible for drawing the ControlBase's tag itself.
+// ControlBase implementations can override this to draw the tag in a different way, or draw more than one tag if
+// drawing a compound control.
+func (c *ControlBase) DrawTag(ctx context.Context, w io.Writer) {
+	var ctrl string
+
+	log.Debug(ctx, logModule, "Drawing tag: "+c.ID())
+
+	attributes := c.this().DrawingAttributes(ctx)
+
+	if c.IsVoidTag {
+		ctrl = html5tag.RenderVoidTag(c.Tag, attributes)
+	} else {
+		buf := pool.GetBuffer()
+		c.this().DrawInnerHtml(ctx, buf)
+		c.RenderAutoControls(ctx, buf)
+		if c.Tag == "" {
+			ctrl = buf.String() // a wrapper with no tag. Just inserts functionality and draws its children.
+		} else if c.hasNoSpace {
+			ctrl = html5tag.RenderTagNoSpace(c.Tag, attributes, buf.String())
+
+		} else {
+			ctrl = html5tag.RenderTag(c.Tag, attributes, buf.String())
+		}
+		defer pool.PutBuffer(buf)
+	}
+	if _, err := io.WriteString(w, ctrl); err != nil {
+		panic(err)
+	}
+}
+
+// RenderAutoControls is an internal function to draw controls marked to autoRender. These are generally used for hidden controls
+// that can be shown without impacting layout, or that are scripts only. ControlBase implementations that need to
+// put these controls in particular locations on the form can override this.
+func (c *ControlBase) RenderAutoControls(ctx context.Context, w io.Writer) {
+	// Figuring out where to draw these controls can be difficult.
+
+	for ctrl := range c.ChildControls() {
+		if ctrl.shouldAutoRenderValue() &&
+			!ctrl.WasRendered() {
+
+			ctrl.Draw(ctx, w)
+		}
+	}
+	return
+}
+
+// DrawTemplate is used by the framework to draw the Control using a template.
+// Controls that use templates should use this function signature for the template. That will override this one, and
+// we will then detect that the template was drawn. Otherwise, we detect that no template was defined, and it will move
+// on to drawing the controls without a template, or just the text if text is defined.
+func (c *ControlBase) DrawTemplate(ctx context.Context, w io.Writer) (err error) {
+	// Don't change this to use some kind of function injection, as such things are not serializable
+	return NoTemplateError()
+}
+
+// DrawInnerHtml is used by the framework to draw just the inner html of the control, if the control is not a self
+// terminating (void) control. Sub-controls can override this.
+func (c *ControlBase) DrawInnerHtml(ctx context.Context, w io.Writer) {
+	if err := c.this().DrawTemplate(ctx, w); err == nil {
+		return
+	} else if IsNoTemplateError(err) {
+		// There is no template, so do the default of drawing child controls and then
+		// text.
+		if c.HasChildControls() {
+			c.this().DrawChildControls(ctx, w)
+			return
+		}
+
+		c.this().DrawText(ctx, w)
+	} else {
+		panic(err)
+	}
+
+	return
+}
+
+// DrawChildControls renders the child controls that have not yet been drawn into the buffer.
+func (c *ControlBase) DrawChildControls(ctx context.Context, w io.Writer) {
+	for child := range c.ChildControls() {
+		if !child.WasRendered() {
+			child.Draw(ctx, w)
+		}
+	}
+	return
+}
+
+// DrawText renders the text of the control, escaping if needed.
+func (c *ControlBase) DrawText(ctx context.Context, w io.Writer) {
+	if c.text != "" {
+		text := c.text
+
+		if !c.textIsHtml {
+			text = html.EscapeString(text)
+		}
+		if _, err := io.WriteString(w, text); err != nil {
+			panic(err)
+		}
+	}
+	return
+}
+
+func (c *ControlBase) shouldAutoRenderValue() bool { return c.shouldAutoRender }
+
+// SetAttribute sets an HTML attribute of the control. You can manually set almost any attribute, but be careful
+// not to set the id attribute, or any attribute that is managed by the control itself. If you are setting
+// a data-* attribute, use [SetDataAttribute] instead. If you are adding a class to the control, use [AddClass].
+func (c *ControlBase) SetAttribute(name string, val any) ControlI {
+	if name == "id" {
+		panic("You can only set the 'id' attribute of a control when it is created")
+	}
+
+	changed, err := c.attributes.SetChanged(name, html5tag.ValueString(val))
+	if err != nil {
+		panic(err)
+	}
+
+	if changed {
+		// The val passed in might be a calculation, so we need to get the ultimate new value
+		v2 := c.attributes.Get(name)
+		// We are recording here that the attribute intends to change. If we are responding to an ajax
+		// request, we will send back a command to only change the attribute on the control if the
+		// control does not get completely redrawn. If the control is completely redrawn, the new
+		// attribute will automatically be drawn, so there would be no need to also send an attribute change command.
+		c.AddRenderScript("attr", name, v2)
+	}
+	return c.this()
+}
+
+// Attribute returns the value of a custom attribute. Note that this will not return values that are set only during
+// drawing and that are managed by the ControlBase implementation.
+func (c *ControlBase) Attribute(name string) string {
+	return c.attributes.Get(name)
+}
+
+// HasAttribute returns true if the control has the indicated custom attribute defined.
+func (c *ControlBase) HasAttribute(name string) bool {
+	return c.attributes.Has(name)
+}
+
+// DrawingAttributes is called by the framework just before drawing a control, and should
+// return a set of attributes that should override those set by the user. This allows controls to set attributes
+// that should take precedence over other attributes, and that are critical to drawing the
+// tag of the control. This function is designed to only be called by ControlBase implementations.
+func (c *ControlBase) DrawingAttributes(ctx context.Context) html5tag.Attributes {
+	a := c.attributes.Copy()
+	a.SetID(c.id)          // make sure the control id is set at a minimum
+	a.SetData("grctl", "") // make sure control is registered. Overriding controls can put a control name here.
+
+	if c.isRequired {
+		a.Set("aria-required", "true")
+	}
+
+	channels := stringmap.JoinStrings(c.watchedKeys, "=", ";")
+
+	if channels != "" {
+		a.SetData("grWatch", channels)
+	}
+
+	return a
+}
+
+func (c *ControlBase) resetDrawingFlags() {
+	c.wasRendered = false
+	c.needsRefresh = false
+}
+
+// SetDataAttribute will set a data-* attribute. The name should be camelCase, without "data" in the name.
+// For example:
+//
+//	SetDataAttribute("myVal", 5)
+//
+// will result in the "data-my-val=5" attribute appearing in the HTML, which will be accessible from
+// javascript using .data("myVal").
+func (c *ControlBase) SetDataAttribute(name string, val any) {
+	var v string
+	var ok bool
+
+	if v, ok = val.(string); !ok {
+		v = fmt.Sprint(v)
+	}
+
+	changed, err := c.attributes.SetDataChanged(name, v)
+	if err != nil {
+		panic(err)
+	}
+
+	if changed {
+		c.AddRenderScript("data", name, v) // Use the data method to set the data during ajax requests
+	}
+}
+
+// MergeAttributes will merge the given attributes into the control's attributes.
+func (c *ControlBase) MergeAttributes(a html5tag.Attributes) ControlI {
+	c.attributes.Merge(a)
+	return c.this()
+}
+
+// ProcessAttributeString is used by the drawing template to let you set attributes in the draw tag.
+// Attributes are of the form `name="value"`.
+func (c *ControlBase) ProcessAttributeString(s string) ControlI {
+	if s != "" {
+		c.attributes.MergeString(s)
+	}
+	return c.this()
+}
+
+// AddClass will add a class or classes to the control. If adding multiple classes at once, separate them with
+// a space.
+func (c *ControlBase) AddClass(class string) ControlI {
+	if changed := c.attributes.AddClassChanged(class); changed {
+		// Note here. We cannot just draw the class, because DrawingAttributes might return
+		// a class, and DrawingAttributes requires a context. So we coordinate with goradd.js
+		// to be able to add and remove a class.
+		c.AddRenderScript("class", "+"+class)
+	}
+	return c.this()
+}
+
+// RemoveClass will remove the named class from the control.
+func (c *ControlBase) RemoveClass(class string) ControlI {
+	if changed := c.attributes.RemoveClass(class); changed {
+		c.AddRenderScript("class", "-"+class)
+	}
+	return c.this()
+}
+
+// HasClass returns true if the class has been assigned to the control from the GO side. We do not currently detect
+// class changes done in javascript.
+func (c *ControlBase) HasClass(class string) bool {
+	return c.attributes.HasClass(class)
+}
+
+// NeedsRefresh returns true if the control needs to be completely redrawn. Generally you control
+// this by calling Refresh(), but subclasses can implement other ways of detecting this.
+func (c *ControlBase) NeedsRefresh() bool {
+	return c.needsRefresh
+}
+
+// PutCustomScript is called by the framework to ask the control to inject any javascript it needs into the form.
+// In particular, this is the place where Controls add javascript that transforms the html into a custom javascript control.
+// A ControlBase implementation does this by calling functions on the response object.
+func (c *ControlBase) PutCustomScript(ctx context.Context, response *Response) {
+}
+
+// GetActionScripts is an internal function called during drawing to gather all the event related
+// scripts attached to the control and send them to the response.
+func (c *ControlBase) GetActionScripts(r *Response) {
+	// Render actions
+	if c.events != nil {
+		for id, e := range c.events {
+			s := event.RenderActions(e, c.this(), id)
+			r.ExecuteJavaScript(s, PriorityStandard)
+		}
+	}
+}
+
+// WrapEvent is an internal function to allow the control to customize its treatment of event processing.
+func (c *ControlBase) WrapEvent(eventName string, selector string, eventJs string, options map[string]interface{}) string {
+	if selector != "" {
+		return fmt.Sprintf("g$('%s').on('%s', '%s', function(event, eventData){%s}, %s);", c.ID(), eventName, selector, eventJs, javascript.ToJavaScript(options))
+	} else {
+		return fmt.Sprintf("g$('%s').on('%s', function(event, eventData){%s}, %s);", c.ID(), eventName, eventJs, javascript.ToJavaScript(options))
+	}
+}
+
 func (c *ControlBase) doAction(ctx context.Context) {
 	var e *event.Event
 	var ok bool
 	var isPrivate bool
 
-	request := page.GetRequest(ctx)
+	request := GetRequest(ctx)
 
 	if e, ok = c.events[request.EventID]; ok {
 		isPrivate = event.IsPrivate(e)
@@ -296,24 +691,68 @@ func (c *ControlBase) doAction(ctx context.Context) {
 			}
 			if dest := c.form.GetControl(controlId); dest != nil {
 				if isPrivate {
-					log.Debug(ctx, logModule, "doAction - DoPrivateAction",
-						"dest_id", dest.ID(),
-						"action_id", p.ID,
-						"action_type", reflect.TypeOf(p.Action).String(),
-						"trigger_id", p.ControlId)
+					if log.IsDebugging() {
+						log.Debug(ctx, logModule, "doAction - DoPrivateAction",
+							"dest_id", dest.ID(),
+							"action_id", p.ID,
+							"action_type", reflect.TypeOf(p.Action).String(),
+							"trigger_id", p.ControlId)
+					}
 					dest.DoPrivateAction(ctx, p)
 				} else {
-					if log.HasLogger(log.FrameworkDebugLog) {
-						log.FrameworkDebugf("doAction - DoAction, DestId: %s, ActionId: %d, DoAction: %s, TriggerId: %s",
-							dest.ID(), p.ID, reflect.TypeOf(p.Action).String(), p.ControlId)
+					if log.IsDebugging() {
+						log.Debug(ctx, logModule, "doAction - DoAction",
+							"dest_id", dest.ID(),
+							"action_id", p.ID,
+							"action_type", reflect.TypeOf(p.Action).String(),
+							"trigger_id", p.ControlId)
 					}
 					dest.DoAction(ctx, p)
 				}
 			}
 		}
 	} else {
-		log.FrameworkDebug("doAction - failed validation: ", e.String())
+		log.Debug(ctx, logModule, "doAction - failed validation",
+			"error", e.String())
 	}
+}
+
+// SetActionValue sets a value that is provided to actions when they are triggered. The value can be a static value
+// or one of the javascript.* objects that can dynamically generate values. The value is then sent back to the Action
+// function after the action is triggered as the ControlActionValue in the action.Params struct.
+func (c *ControlBase) SetActionValue(v any) ControlI {
+	c.actionValue = v
+	return c.this()
+}
+
+// ActionValue returns the control's action value that is sent to the Action function in the ControlActionValue of the
+// action.Params struct.
+func (c *ControlBase) ActionValue() any {
+	return c.actionValue
+}
+
+// DoAction handles actions that are triggered by events on controls.
+//
+// Forms and controls should implement this method to handle an action.
+// Typically, the DoAction function will first look at the ID, or Event to know how to handle it.
+//
+// When a control does not handle an action, it should pass it to its "superclass" object. If none
+// of the superclasses of the object handle it, the action will be passed to its parent control in the form
+// object hierarchy.
+func (c *ControlBase) DoAction(ctx context.Context, a action.Params) {
+	if a.ID == action.RefreshActionId {
+		c.Refresh()
+		return
+	}
+	if p := c.ParentControl(); p != nil { // a form does not have a parent
+		p.DoAction(ctx, a)
+	}
+}
+
+// DoPrivateAction processes actions that a control sets up for itself, and that it does not want to give the opportunity
+// for users of the control to manipulate or remove those actions. Generally, private actions should call their embedded
+// DoPrivateAction method too.
+func (c *ControlBase) DoPrivateAction(ctx context.Context, a action.Params) {
 }
 
 // Refresh will force the control to be completely redrawn on the next update.
@@ -326,6 +765,10 @@ func (c *ControlBase) IsDisabled() bool {
 	return c.attributes.IsDisabled()
 }
 
+func (c *ControlBase) markOnPage(v bool) {
+	c.isOnPage = v
+}
+
 // IsOnPage returns true if the control has been rendered on the page.
 func (c *ControlBase) IsOnPage() bool {
 	return c.isOnPage
@@ -334,7 +777,7 @@ func (c *ControlBase) IsOnPage() bool {
 // UpdateFormValues is called by the framework to cause the control to retrieve its values from the form.
 // Control implementations should implement this function and then look in the context ctx
 // to retrieve its values.
-func (c *ControlBase) UpdateFormValues(request *page.RequestContext) {
+func (c *ControlBase) UpdateFormValues(request *RequestContext) {
 }
 
 // SetValidationType specifies how this control validates other controls. Typically, its either ValidateNone or ValidateForm.
@@ -392,7 +835,7 @@ func (c *ControlBase) passesValidation(ctx context.Context, e *event.Event) (val
 		if c.validationType == event.ValidateForm {
 			targets = []ControlI{c.form}
 		} else if c.validationType == event.ValidateContainer {
-			for target := c.Parent(); target != nil; target = target.Parent() {
+			for target := c.ParentControl(); target != nil; target = target.ParentControl() {
 				switch target.validationTypeValue() {
 				case event.ValidateChildrenOnly:
 					fallthrough
@@ -403,7 +846,8 @@ func (c *ControlBase) passesValidation(ctx context.Context, e *event.Event) (val
 				case event.ValidateTargetsOnly:
 					validation = target.validationTypeValue()
 					targets = []ControlI{target}
-					break
+				default:
+					// do nothing
 				}
 			}
 			if targets == nil {
@@ -445,10 +889,12 @@ func (c *ControlBase) passesValidation(ctx context.Context, e *event.Event) (val
 		}
 
 	case event.ValidateTargetsOnly:
-		var valid bool
+		var valid bool = true
 		for _, t := range targets {
 			valid = t.Validate(ctx) && valid
 		}
+	default:
+		// do nothing
 	}
 	return valid
 }
@@ -478,7 +924,7 @@ func (c *ControlBase) validateSelfAndSiblings(ctx context.Context) bool {
 	}
 
 	var valid = true
-	for sibling := range c.Parent().Children() {
+	for sibling := range c.ParentControl().ChildControls() {
 		if sibling.IsOnPage() {
 			valid = sibling.Validate(ctx) && valid
 		}
@@ -492,7 +938,7 @@ func (c *ControlBase) validateSelfAndChildren(ctx context.Context) bool {
 	}
 
 	var isValid = true
-	for child := range c.Children() {
+	for child := range c.ChildControls() {
 		if !child.blockParentValidationValue() && child.IsOnPage() {
 			isValid = child.validateSelfAndChildren(ctx) && isValid
 		}
@@ -511,7 +957,7 @@ func (c *ControlBase) validateSiblingsAndChildren(ctx context.Context) bool {
 	}
 
 	var isValid = true
-	for sibling := range c.Parent().Children() {
+	for sibling := range c.ParentControl().ChildControls() {
 		if !sibling.IsOnPage() {
 			continue
 		}
@@ -540,8 +986,8 @@ func (c *ControlBase) SetValidationError(e string) {
 			c.validationState = ValidationInvalid
 			c.AddRenderScript("attr", "aria-invalid", "true")
 		}
-		if c.Parent() != nil {
-			c.Parent().ChildValidationChanged() // notify parent wrappers
+		if c.ParentControl() != nil {
+			c.ParentControl().ChildValidationChanged() // notify parent wrappers
 		}
 	}
 }
@@ -552,7 +998,7 @@ func (c *ControlBase) ResetValidation() {
 		changed = ctrl.resetValidationValues() || changed
 	}
 	if changed {
-		if p := c.Parent(); p != nil {
+		if p := c.ParentControl(); p != nil {
 			p.ChildValidationChanged()
 		}
 	}
@@ -571,10 +1017,10 @@ func (c *ControlBase) resetValidationValues() (changed bool) {
 }
 
 // ChildValidationChanged is sent by the framework when a child control's validation message
-// has changed. Parent controls can use this to change messages or attributes in response.
+// has changed. ParentControl controls can use this to change messages or attributes in response.
 func (c *ControlBase) ChildValidationChanged() {
-	if c.Parent() != nil {
-		c.Parent().ChildValidationChanged()
+	if c.ParentControl() != nil {
+		c.ParentControl().ChildValidationChanged()
 	}
 }
 
@@ -592,7 +1038,7 @@ func (c *ControlBase) SelfAndAllChildren() iter.Seq[ControlI] {
 		if !yield(c) {
 			return
 		}
-		for child := range c.AllChildren() {
+		for child := range c.AllChildControls() {
 			if !yield(child) {
 				return
 			}
@@ -600,9 +1046,26 @@ func (c *ControlBase) SelfAndAllChildren() iter.Seq[ControlI] {
 	}
 }
 
+// AddRenderScript adds a javascript command to be executed on the next ajax draw.
+// These commands allow javascript to change an aspect of the control without
+// having to redraw the entire control. This should be used by ControlBase implementations only.
+func (c *ControlBase) AddRenderScript(f string, params ...any) {
+	c.attributeScripts = append(c.attributeScripts, attributeScriptEntry{id: c.ID(), f: f, commands: params})
+}
+
+// AddRelatedRenderScript adds a render script for a related html object. This is primarily used by control implementations.
+func (c *ControlBase) AddRelatedRenderScript(id string, f string, params ...any) {
+	c.attributeScripts = append(c.attributeScripts, attributeScriptEntry{id: id, f: f, commands: params})
+}
+
+// WasRendered returns true if the control has been rendered.
+func (c *ControlBase) WasRendered() bool {
+	return c.wasRendered
+}
+
 // Serialize encodes the control for the pagecache serializer.
 // Control implementations should call this before their own serialization process.
-func (c *ControlBase) Serialize(e page.Encoder) {
+func (c *ControlBase) Serialize(e Encoder) {
 	c.treeNode.serialize(e)
 	if err := e.Encode(c.Tag); err != nil {
 		panic(err)
@@ -685,7 +1148,7 @@ func (c *ControlBase) Serialize(e page.Encoder) {
 // should call this first before calling their own version. However, after deserialization, the control will
 // not be ready for use, since its parent, form or child controls still need to be deserialized.
 // The Decoded function should be called to fix up the necessary internal pointers.
-func (c *ControlBase) Deserialize(d page.Decoder) {
+func (c *ControlBase) Deserialize(d Decoder) {
 	c.treeNode.deserialize(d)
 	if err := d.Decode(&c.Tag); err != nil {
 		panic(err)
@@ -764,12 +1227,17 @@ func (c *ControlBase) Deserialize(d page.Decoder) {
 	}
 }
 
+// Deserialized is called after a control has been restored from serialization and
+// the internal form pointer has been restored. Use this as an opportunity to recreate
+// any internal pointers a control needs to do its work.
+func (c *ControlBase) Deserialized() {}
+
 func init() {
 	/*
-		gob.Register(new(stateType))
-		gob.Register(new(stateStoreType))
-		gob.Register(new(maps.Map[string, any]))
-		gob.Register(new(maps.Map[string, SavedState]))
-		gob.Register(new(eventMap))
-		gob.Register(new(map[event.EventID]*event.Event))*/
+		gob.RegisterControl(new(stateType))
+		gob.RegisterControl(new(stateStoreType))
+		gob.RegisterControl(new(maps.Map[string, any]))
+		gob.RegisterControl(new(maps.Map[string, SavedState]))
+		gob.RegisterControl(new(eventMap))
+		gob.RegisterControl(new(map[event.EventID]*event.Event))*/
 }

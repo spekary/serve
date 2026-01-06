@@ -1,4 +1,4 @@
-package control
+package page
 
 import (
 	"encoding/json"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
-	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/javascript"
 )
 
@@ -449,7 +448,7 @@ type responseEncoded struct {
 
 // Serialize encodes the response for the pagestate. Currently, serialization of the response is only
 // used by the testing framework.
-func (r *Response) Serialize(e page.Encoder) {
+func (r *Response) Serialize(e Encoder) {
 	enc := responseEncoded{
 		ExclusiveCommand:       r.exclusiveCommand,
 		HighPriorityCommands:   r.highPriorityCommands,
@@ -470,7 +469,7 @@ func (r *Response) Serialize(e page.Encoder) {
 
 // Deserialize unpacks the response from the pagestate. Currently the response is only serialized
 // in the testing framework.
-func (r *Response) Deserialize(d page.Decoder) {
+func (r *Response) Deserialize(d Decoder) {
 	enc := responseEncoded{}
 	if err := d.Decode(&enc); err != nil {
 		panic(err)

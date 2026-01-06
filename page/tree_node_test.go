@@ -1,6 +1,8 @@
-package control
+package page
 
 import (
+	"bytes"
+	"encoding/gob"
 	"slices"
 	"testing"
 
@@ -63,10 +65,10 @@ func Test_treeNode_SetParent(t *testing.T) {
 	c2 := newTestControl(form, form, "c2")
 	c3 := newTestControl(form, c2, "c3")
 
-	ret := c3.SetParent(c2)
+	ret := c3.SetParentControl(c2)
 	assert.False(t, ret)
 
-	ret = c3.SetParent(c1)
+	ret = c3.SetParentControl(c1)
 	assert.True(t, ret)
 
 	assert.Equal(t, "c1", c3.parentID())
@@ -74,7 +76,7 @@ func Test_treeNode_SetParent(t *testing.T) {
 	assert.Len(t, c2.childIDs(), 0)
 
 	// same as Detach()
-	ret = c3.SetParent(nil)
+	ret = c3.SetParentControl(nil)
 	assert.True(t, ret)
 	assert.Equal(t, "", c3.parentID())
 }
@@ -104,7 +106,7 @@ func Test_treeNode_AllChildren(t *testing.T) {
 				newTestControl(form, form, id)
 			}
 
-			gotNodes := slices.Collect(form.Children())
+			gotNodes := slices.Collect(form.ChildControls())
 
 			// Extract IDs for easy comparison
 			var gotIDs []string
@@ -113,7 +115,7 @@ func Test_treeNode_AllChildren(t *testing.T) {
 			}
 
 			if !slices.Equal(gotIDs, tt.wantIDs) {
-				t.Errorf("Children() = %v, want %v", gotIDs, tt.wantIDs)
+				t.Errorf("ChildControls() = %v, want %v", gotIDs, tt.wantIDs)
 			}
 		})
 	}
@@ -121,6 +123,9 @@ func Test_treeNode_AllChildren(t *testing.T) {
 
 func Test_treeNode_AppendBinary(t *testing.T) {
 	// Just testing tree node serialization and deserialization
+	var b bytes.Buffer
+	e := gob.NewEncoder(&b)
+	d := gob.NewDecoder(&b)
 
 	tn := treeNode{
 		id:       "a",
@@ -129,13 +134,10 @@ func Test_treeNode_AppendBinary(t *testing.T) {
 		form:     nil,
 	}
 
-	b, err := tn.appendBinary(nil)
-	assert.NoError(t, err)
+	tn.serialize(e)
 
 	tn2 := treeNode{}
-	n, err2 := tn2.consume(b)
-	assert.NoError(t, err2)
-	assert.Equal(t, len(b), n)
+	tn2.deserialize(d)
 	assert.Equal(t, "a", tn2.id)
 	assert.Equal(t, "b", tn2.parentId)
 	assert.Equal(t, []string{"c", "d", "e"}, tn2.childIds)

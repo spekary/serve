@@ -62,9 +62,9 @@ func ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// getPage returns a page from the cache, whether it is previously allocated, or
+// getPage returns a page from the controlCache, whether it is previously allocated, or
 // is a new page. If there is an error creating a new page, it should panic. If this is
-// an ajax call and the previous page could not be found in the cache, then return nil in page.
+// an ajax call and the previous page could not be found in the controlCache, then return nil in page.
 func getPage(ctx context.Context) (page *Page) {
 	var pageStateId string
 
@@ -74,12 +74,12 @@ func getPage(ctx context.Context) (page *Page) {
 		page = pageCache.Get(pageStateId)
 	}
 	if page != nil {
-		return // found a page in the pagestate cache
+		return // found a page in the pagestate controlCache
 	}
 
 	if request.requestMode == RequestModeAjax {
 		// TODO: If this happens, we need to reload the whole page, because we lost the pagestate completely
-		// generally this should only happen if the page state drops out of the cache,
+		// generally this should only happen if the page state drops out of the controlCache,
 		// which might happen if a page sits open for a long time, and then the user initiates an ajax action
 		log.Debug(ctx, "page", "Ajax lost the page state")
 		return

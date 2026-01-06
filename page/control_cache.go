@@ -1,40 +1,31 @@
-package control
+package page
 
 import (
 	"iter"
 	"strconv"
-
-	"github.com/goradd/serve/page"
 )
 
 const defaultPrefix = "c"
 
-type cacher interface {
-	generateId() string
-	cacheControl(c ControlI)
-	GetControl(id string) (c ControlI)
-	SetGeneratedIdPrefix(prefix string)
-}
-
-// cache is a map of the live control objects that are associated with a form.
-// It is a mixin for the form_base, and is a way to separate and encapsulate the cache
+// controlCache is a map of the live control objects that are associated with a form.
+// It is a mixin for the form_base, and is a way to separate and encapsulate the controlCache
 // aspect of a form for testing and maintenance.
-type cache struct {
+type controlCache struct {
 	reg     map[string]ControlI
 	counter int
 	prefix  string
 }
 
-func (r *cache) SetGeneratedIdPrefix(prefix string) {
+func (r *controlCache) setGeneratedIdPrefix(prefix string) {
 	r.prefix = prefix
 }
 
-func (r *cache) generateId() string {
+func (r *controlCache) generateId() string {
 	if r.prefix == "" {
 		r.prefix = defaultPrefix
 	}
 	var id string
-	// append integer to prefix and confirm it is not already in the cache
+	// append integer to prefix and confirm it is not already in the controlCache
 	for {
 		id = r.prefix
 		// Convert string to byte slice
@@ -51,7 +42,7 @@ func (r *cache) generateId() string {
 	return id
 }
 
-func (r *cache) cacheControl(c ControlI) {
+func (r *controlCache) addControl(c ControlI) {
 	if r.reg == nil {
 		r.reg = make(map[string]ControlI)
 	}
@@ -61,12 +52,12 @@ func (r *cache) cacheControl(c ControlI) {
 	r.reg[c.ID()] = c
 }
 
-func (r *cache) GetControl(id string) (c ControlI) {
+func (r *controlCache) getControl(id string) (c ControlI) {
 	c, _ = r.reg[id]
 	return
 }
 
-func (r *cache) serialize(e page.Encoder) {
+func (r *controlCache) serialize(e Encoder) {
 	if err := e.Encode(r.counter); err != nil {
 		panic(err)
 	}
@@ -74,7 +65,7 @@ func (r *cache) serialize(e page.Encoder) {
 		panic(err)
 	}
 
-	var l int = len(r.reg)
+	var l = len(r.reg)
 	if err := e.Encode(l); err != nil {
 		panic(err)
 	}
@@ -87,7 +78,7 @@ func (r *cache) serialize(e page.Encoder) {
 	}
 }
 
-func (r *cache) deserialize(d page.Decoder) {
+func (r *controlCache) deserialize(d Decoder) {
 	if err := d.Decode(&r.counter); err != nil {
 		panic(err)
 	}
@@ -98,20 +89,24 @@ func (r *cache) deserialize(d page.Decoder) {
 	if err := d.Decode(&l); err != nil {
 		panic(err)
 	}
-	for i := 0; i < l; i++ {
-		var registryID uint64
-		if err := d.Decode(&registryID); err != nil {
-			return
+	if l > 0 {
+		r.reg = make(map[string]ControlI, l)
+		for i := 0; i < l; i++ {
+			var registryID uint64
+			if err := d.Decode(&registryID); err != nil {
+				return
+			}
+			c := createRegisteredControl(registryID)
+			c.Deserialize(d)
+			r.reg[c.ID()] = c
 		}
-		c := createRegisteredControl(registryID)
-		c.Deserialize(d)
-		r.reg[c.ID()] = c
 	}
 }
 
 // AllControls returns an iterator that yields all the controls in the form,
 // including the form itself, in no particular order.
-func (r *cache) AllControls() iter.Seq[ControlI] {
+
+func (r *controlCache) AllControls() iter.Seq[ControlI] {
 	return func(yield func(ControlI) bool) {
 		for _, child := range r.reg {
 			if !yield(child) {
