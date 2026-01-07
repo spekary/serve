@@ -99,7 +99,8 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 			panic("form not found for path: " + path)
 		}
 		p.form = f()
-		p.form.SetupNewForm(ctx, p)
+		p.form.setPage(p)
+		p.form.SetupNewForm(ctx)
 		p.Draw(ctx, w)
 	} else {
 		err = p.form.Run(ctx)
@@ -284,6 +285,8 @@ func (p *Page) Deserialize(r io.Reader) {
 	}
 	f := c.(FormI) // will panic if this isn't a form, so our recovery handler will deal with it.
 
+	p.form = f
+	f.setPage(p)
 	// fix up all controls with additional info they need
 	for c2 := range p.controlCache.AllControls() {
 		c2.setForm(f)

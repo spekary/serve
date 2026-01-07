@@ -19,6 +19,7 @@ type testForm struct {
 
 func newTestForm() FormI {
 	f := new(testForm)
+	f.setPage(new(Page))
 	f.Init(f, "testForm")
 	return f
 }

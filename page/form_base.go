@@ -28,7 +28,7 @@ type FormI interface {
 	SetGeneratedIdPrefix(prefix string)
 	GenerateId() string
 
-	SetupNewForm(ctx context.Context, p *Page)
+	SetupNewForm(ctx context.Context)
 	Run(ctx context.Context) error
 	Preload(ctx context.Context)
 	AddHeadTags()
@@ -42,6 +42,7 @@ type FormI interface {
 
 	renderAjax(ctx context.Context, w io.Writer)
 	addControl(c ControlI)
+	setPage(p *Page)
 }
 
 type headerItem = maps.SliceMap[string, html5tag.Attributes]
@@ -71,8 +72,7 @@ func (f *FormBase) Init(self FormI, id string) {
 
 // SetupNewForm is called by the framework's page router whenever a new URL is loaded.
 // You should not need to call this function normally.
-func (f *FormBase) SetupNewForm(ctx context.Context, p *Page) {
-	f.page = p
+func (f *FormBase) SetupNewForm(ctx context.Context) {
 	f.this().Preload(ctx)
 	f.this().AddHeadTags()
 	f.this().CreateControls(ctx)
@@ -312,4 +312,8 @@ func (f *FormBase) resetAllDrawingFlags() {
 	for c := range f.SelfAndAllChildren() {
 		c.resetDrawingFlags()
 	}
+}
+
+func (f *FormBase) setPage(p *Page) {
+	f.page = p
 }
