@@ -3,6 +3,7 @@ package page
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -122,7 +123,31 @@ func Test_treeNode_AllChildren(t *testing.T) {
 	}
 }
 
-func Test_treeNode_AppendBinary(t *testing.T) {
+type mockSerializer struct {
+	failAt int
+	calls  int
+	err    error
+}
+
+func (m *mockSerializer) Encode(v any) error {
+	m.calls++
+
+	if m.failAt > 0 && m.calls == m.failAt {
+		return m.err
+	}
+	return nil
+}
+
+func (m *mockSerializer) Decode(v any) error {
+	m.calls++
+
+	if m.failAt > 0 && m.calls == m.failAt {
+		return m.err
+	}
+	return nil
+}
+
+func Test_treeNode_Serialize(t *testing.T) {
 	// Just testing tree node serialization and deserialization
 	var b bytes.Buffer
 	e := gob.NewEncoder(&b)
@@ -142,4 +167,96 @@ func Test_treeNode_AppendBinary(t *testing.T) {
 	assert.Equal(t, "a", tn2.id)
 	assert.Equal(t, "b", tn2.parentId)
 	assert.Equal(t, []string{"c", "d", "e"}, tn2.childIds)
+
+	// test panic
+	for i := 1; i <= 3; i++ {
+		e2 := &mockSerializer{
+			failAt: i,
+			err:    fmt.Errorf("error"),
+		}
+		assert.Panics(t, func() {
+			tn.serialize(e2)
+		})
+	}
+
+	for i := 1; i <= 3; i++ {
+		e2 := &mockSerializer{
+			failAt: i,
+			err:    fmt.Errorf("error"),
+		}
+		assert.Panics(t, func() {
+			tn.deserialize(e2)
+		})
+	}
+
+}
+
+func Test_treeNode_Coverage(t *testing.T) {
+	// Basic tests for code coverage
+
+	form := newTestForm()
+	c1 := newTestControl(form, form, "c1")
+	assert.Equal(t, form, c1.Form())
+	assert.Equal(t, form, c1.ParentControl())
+	assert.True(t, form.HasChildControls())
+	assert.False(t, c1.HasChildControls())
+	assert.Equal(t, c1, form.FindChildControl("c1"))
+	assert.Nil(t, c1.FindChildControl("c1"))
+	c1.setForm(nil)
+	assert.Nil(t, c1.Form())
+}
+
+func Test_treeNode_AllChildControls(t1 *testing.T) {
+	form := newTestForm()
+	c1 := newTestControl(form, form, "c1")
+	c2 := newTestControl(form, form, "c2")
+	_ = newTestControl(form, c1, "")
+	_ = newTestControl(form, c2, "")
+	c22 := newTestControl(form, c2, "")
+
+	var count int
+	for c := range form.AllChildControls() {
+		_, ok := c.(ControlI)
+		assert.True(t1, ok)
+
+		count++
+	}
+	assert.Equal(t1, 5, count)
+
+	count = 0
+	for c := range c1.AllChildControls() {
+		_, ok := c.(ControlI)
+		assert.True(t1, ok)
+		count++
+	}
+	assert.Equal(t1, 1, count)
+
+	count = 0
+	for _ = range c22.AllChildControls() {
+		count++
+	}
+	assert.Equal(t1, 0, count)
+
+	// test failures
+	tests := []struct {
+		name  string
+		count int
+	}{
+		{"fail at 1", 1},
+		{"fail at 2", 2},
+		{"fail at 3", 3},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			var count2 int
+			form.AllChildControls()(func(i ControlI) bool {
+				count2++
+				if count2 == tt.count {
+					return false
+				}
+				return true
+			})
+			assert.Equal(t1, tt.count, count2)
+		})
+	}
 }

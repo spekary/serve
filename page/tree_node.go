@@ -85,13 +85,14 @@ func (t *treeNode) SetParentControl(newParent treeNoder) bool {
 }
 
 // Detach removes the item from its parent control.
-// After this call, the item is still in the control controlCache, so it is still available for use, but you
-// should remember its id so you can get it from the controlCache again in the future.
+// After this call, the item is still in the control cache, so it is still available for use, but you
+// should remember its id so you can get it from the cache again in the future.
 func (t *treeNode) Detach() {
 	parentNode := t.parentNode()
 	if parentNode == nil {
 		if t.parentId != "" {
-			log.Debug(nil, logModule, "ParentControl node is missing")
+			log.Error(nil, logModule, "Parent control node is missing",
+				"parent_id", t.parentId)
 		}
 		return
 	}
@@ -143,7 +144,8 @@ func (t *treeNode) ChildControls() iter.Seq[ControlI] {
 		for _, id := range t.childIds {
 			child := t.form.GetControl(id)
 			if child == nil {
-				continue // Skip if child was removed from controlCache
+				log.Error(nil, logModule, "Child control node is missing")
+				continue // Skip if child was removed from control cache. This is an error.
 			}
 			if !yield(child) {
 				return
