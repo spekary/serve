@@ -1,19 +1,20 @@
 package page
 
-/*
-func TestBasicPageCache(t *testing.T) {
-	controlCache := NewPageCache()
+import (
+	"testing"
 
-	p1 := NewPage("1")
-	p2 := NewPage("2")
+	"github.com/stretchr/testify/assert"
+)
+
+func TestBasicPageCache(t *testing.T) {
+	controlCache := NewFastPageCache(10, 60*60*24)
+
+	p1 := &Page{stateId: "1"}
+	p2 := &Page{stateId: "2"}
 
 	controlCache.Set("1", p1)
 	controlCache.Set("2", p2)
 
 	p3 := controlCache.Get("1")
-
-	if p3 != p1 {
-		t.Error("Could not retrieve page")
-	}
+	assert.Equal(t, p1, p3)
 }
-*/

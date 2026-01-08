@@ -71,7 +71,7 @@ func registryId(i ControlI) uint64 {
 	typ := i.TypeOf()
 	id, ok := controlRegistryIds[typ]
 	if !ok {
-		panic("ControlBase type is not registered: " + typ.String())
+		panic("Control type is not registered: " + typ.String())
 	}
 	return id
 }
@@ -89,7 +89,10 @@ func createRegisteredControl(registryID uint64) ControlI {
 }
 
 func controlIsRegistered(i ControlI) bool {
-	typ := i.TypeOf()
+	typ := reflect.TypeOf(i)
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
 	_, ok := controlRegistryIds[typ]
 	return ok
 }

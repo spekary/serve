@@ -91,14 +91,14 @@ func ToJavaScript(v interface{}) string {
 
 	case maps.MapI[string, any]:
 		var out string
-		s.Range(func(k string, v interface{}) bool {
+
+		for k, v := range s.All() {
 			if v2, ok := v.(NoQuoteKey); ok {
 				out += k + ":" + ToJavaScript(v2.Value) + ","
 			} else {
 				out += ToJavaScript(k) + ":" + ToJavaScript(v) + ","
 			}
-			return true
-		})
+		}
 		if len(out) == 0 {
 			return "{}"
 		} else {
@@ -106,10 +106,9 @@ func ToJavaScript(v interface{}) string {
 		}
 	case maps.MapI[string, string]:
 		var out string
-		s.Range(func(k string, v string) bool {
+		for k, v := range s.All() {
 			out += ToJavaScript(k) + ":" + ToJavaScript(v) + ","
-			return true
-		})
+		}
 		if len(out) == 0 {
 			return "{}"
 		} else {

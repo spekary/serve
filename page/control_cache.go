@@ -105,7 +105,6 @@ func (r *controlCache) deserialize(d Decoder) {
 
 // AllControls returns an iterator that yields all the controls in the form,
 // including the form itself, in no particular order.
-
 func (r *controlCache) AllControls() iter.Seq[ControlI] {
 	return func(yield func(ControlI) bool) {
 		for _, child := range r.reg {

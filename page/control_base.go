@@ -2,6 +2,7 @@ package page
 
 import (
 	"context"
+	"encoding/gob"
 	"fmt"
 	"html"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/goradd/serve/page/event"
 	"github.com/goradd/serve/page/javascript"
 	"github.com/goradd/serve/pool"
+	"github.com/goradd/serve/session"
 )
 
 const sessionControlStates string = "goradd.controlStates"
@@ -95,6 +97,8 @@ type ControlI interface {
 	base.BaseI
 	treeNoder
 
+	// Drawing support
+
 	Draw(ctx context.Context, w io.Writer)
 	DrawTag(context.Context, io.Writer)
 	DrawInnerHtml(context.Context, io.Writer)
@@ -105,14 +109,41 @@ type ControlI interface {
 	DrawChildControls(ctx context.Context, w io.Writer)
 	DrawText(ctx context.Context, w io.Writer)
 	PutCustomScript(ctx context.Context, response *Response)
-	DrawingAttributes(context.Context) html5tag.Attributes
 	NeedsRefresh() bool
 	WasRendered() bool
-
-	UpdateFormValues(request *RequestContext)
-	IsDisabled() bool
 	IsOnPage() bool
 	Refresh()
+	IsRendering() bool
+	IsVisible() bool
+	SetVisible(bool)
+
+	// html and css
+
+	SetTag(tag string) ControlI
+	SetAttribute(name string, val interface{}) ControlI
+	Attribute(string) string
+	HasAttribute(string) bool
+	ProcessAttributeString(s string) ControlI
+	DrawingAttributes(context.Context) html5tag.Attributes
+	AddClass(class string) ControlI
+	RemoveClass(class string) ControlI
+	HasClass(class string) bool
+	SetStyles(html5tag.Style)
+	SetStyle(name string, value string) ControlI
+	SetWidthStyle(w interface{}) ControlI
+	SetHeightStyle(w interface{}) ControlI
+	Attributes() html5tag.Attributes
+	MergeAttributes(a html5tag.Attributes) ControlI
+	SetDisplay(d string) ControlI
+
+	UpdateFormValues(request *RequestContext)
+	SetDisabled(d bool)
+	IsDisabled() bool
+
+	SetTextIsHtml(bool) ControlI
+	TextIsLabel() bool
+	Text() string
+	SetText(t string) ControlI
 
 	SetActionValue(v any) ControlI
 	ActionValue() any
@@ -128,10 +159,19 @@ type ControlI interface {
 	SetValidationType(typ event.ValidationType) ControlI
 	ChildValidationChanged()
 	ResetValidation()
+	ValidationMessage() string
+	SetValidationError(e string)
 
 	Serialize(e Encoder)
 	Deserialize(d Decoder)
 	Deserialized()
+
+	// SaveState tells the control whether to save the basic state of the control, so that when the form is reentered, the
+	// data in the control will remain the same. This is particularly useful if the control is used as a filter for the
+	// contents of another control.
+	SaveState(context.Context, bool)
+	MarshalState(m SavedState)
+	UnmarshalState(m SavedState)
 
 	// package private functions
 
@@ -251,12 +291,79 @@ type ControlBase struct {
 	encoded bool
 
 	// dataConnector automates the transfer of data between a data store and the control.
-	dataConnector DataConnector
+	//dataConnector DataConnector
+	// if we implement this, break it into a mixin
 
 	// watchedKeys are the notification keys that will cause the control to refresh.
 	watchedKeys map[string]string
 
 	// anything added here needs to be also added to the GOB encoder!
+}
+
+func (c *ControlBase) SetStyles(style html5tag.Style) {
+	c.attributes.SetStyles(style)
+	c.Refresh() // TODO: Do this with javascript
+}
+
+func (c *ControlBase) SetStyle(name string, value string) ControlI {
+	if changed, _ := c.attributes.SetStyleChanged(name, value); changed {
+		c.Refresh() // TODO: Do this with javascript
+	}
+	return c.this()
+}
+
+// RemoveClassesWithPrefix will remove the classes on a control that start with the given string.
+// Some CSS frameworks use prefixes to as a kind of namespace for their class tags, and this can
+// make it easier to remove a group of classes with this kind of prefix.
+func (c *ControlBase) RemoveClassesWithPrefix(prefix string) {
+	if c.attributes.RemoveClassesWithPrefix(prefix) {
+		c.Refresh() // TODO: Do this with javascript
+	}
+}
+
+func (c *ControlBase) SetWidthStyle(w interface{}) ControlI {
+	v := html5tag.StyleString(w)
+	c.attributes.SetStyle("width", v)
+	c.AddRenderScript("css", "width", v) // use javascript to set this value
+	return c.this()
+}
+
+func (c *ControlBase) SetHeightStyle(h interface{}) ControlI {
+	v := html5tag.StyleString(h)
+	c.attributes.SetStyle("height", v)
+	c.AddRenderScript("css", "height", v) // use javascript to set this value
+	return c.this()
+}
+
+// SetTextIsHtml to true to turn off html escaping of the text output.
+func (c *ControlBase) SetTextIsHtml(h bool) ControlI {
+	c.textIsHtml = h
+	return c.this()
+}
+
+// TextIsLabel is used by the drawing routines to determine if the control's text should be wrapped with a label tag.
+// This is normally used by checkboxes and radio buttons that use the label tag in a special way.
+func (c *ControlBase) TextIsLabel() bool {
+	return false
+}
+
+// Text returns the text of the control.
+func (c *ControlBase) Text() string {
+	return c.text
+}
+
+// SetText sets the text of the control. Not all controls use this value.
+func (c *ControlBase) SetText(t string) ControlI {
+	if t != c.text {
+		c.text = t
+		c.Refresh()
+	}
+	return c.this()
+}
+
+func (c *ControlBase) Attributes() html5tag.Attributes {
+	//TODO implement me
+	panic("implement me")
 }
 
 // Init initializes a control
@@ -482,6 +589,17 @@ func (c *ControlBase) DrawText(ctx context.Context, w io.Writer) {
 
 func (c *ControlBase) shouldAutoRenderValue() bool { return c.shouldAutoRender }
 
+func (c *ControlBase) resetDrawingFlags() {
+	c.wasRendered = false
+	c.needsRefresh = false
+}
+
+// SetTag sets the tag name displayed in the html object.
+func (c *ControlBase) SetTag(tag string) ControlI {
+	c.Tag = tag
+	return c
+}
+
 // SetAttribute sets an HTML attribute of the control. You can manually set almost any attribute, but be careful
 // not to set the id attribute, or any attribute that is managed by the control itself. If you are setting
 // a data-* attribute, use [SetDataAttribute] instead. If you are adding a class to the control, use [AddClass].
@@ -538,11 +656,6 @@ func (c *ControlBase) DrawingAttributes(ctx context.Context) html5tag.Attributes
 	}
 
 	return a
-}
-
-func (c *ControlBase) resetDrawingFlags() {
-	c.wasRendered = false
-	c.needsRefresh = false
 }
 
 // SetDataAttribute will set a data-* attribute. The name should be camelCase, without "data" in the name.
@@ -760,6 +873,40 @@ func (c *ControlBase) Refresh() {
 	c.needsRefresh = true
 }
 
+// IsVisible returns whether the control will be drawn.
+func (c *ControlBase) IsVisible() bool {
+	return !c.isHidden
+}
+
+// IsDisplayed returns true if the control will be displayed.
+func (c *ControlBase) IsDisplayed() bool {
+	return c.attributes.IsDisplayed()
+}
+
+// SetVisible controls whether the ControlBase will be drawn. Controls that are not visible are not rendered in
+// html, but rather a hidden stub is rendered as a placeholder in case the control is made visible again.
+func (c *ControlBase) SetVisible(v bool) {
+	if c.isHidden == v { // these are opposite in meaning
+		c.isHidden = !v
+		c.Refresh()
+	}
+}
+
+// SetDisplay sets the "display" property of the style attribute of the html control to the given value.
+// Also consider using SetVisible. If you use SetDisplay to hide a control, the control will still be
+// rendered in html, but the browser will not show it.
+func (c *ControlBase) SetDisplay(d string) ControlI {
+	c.attributes.SetDisplay(d)
+	c.Refresh()
+	return c.this()
+}
+
+// SetDisabled will set the "disabled" attribute of the control.
+func (c *ControlBase) SetDisabled(d bool) {
+	c.attributes.SetDisabled(d)
+	c.Refresh()
+}
+
 // IsDisabled returns true if the disabled attribute is true.
 func (c *ControlBase) IsDisabled() bool {
 	return c.attributes.IsDisabled()
@@ -772,6 +919,27 @@ func (c *ControlBase) markOnPage(v bool) {
 // IsOnPage returns true if the control has been rendered on the page.
 func (c *ControlBase) IsOnPage() bool {
 	return c.isOnPage
+}
+
+// IsRendering returns true if we are in the process of rendering the control.
+func (c *ControlBase) IsRendering() bool {
+	return c.isRendering
+}
+
+// SetHasNoSpace tells the control to draw its inner html with no space around it.
+// This should generally only be called by control implementations. If this is not set, spaces
+// might be added to make the HTML more readable, which can affect some html control types.
+func (c *ControlBase) SetHasNoSpace(v bool) ControlI {
+	c.hasNoSpace = v
+	return c
+}
+
+// by the form automatically, after all other controls are drawn, if the control was not drawn in
+// some other way. An example of an auto-rendered control would be a dialog box that starts out hidden,
+// but then is shown by some user response. Such controls are normally shown by javascript, and are
+// absolutely positioned so that they do not affect the layout of the rest of the form.
+func (c *ControlBase) SetShouldAutoRender(r bool) {
+	c.shouldAutoRender = r
 }
 
 // UpdateFormValues is called by the framework to cause the control to retrieve its values from the form.
@@ -1063,6 +1231,94 @@ func (c *ControlBase) WasRendered() bool {
 	return c.wasRendered
 }
 
+// SaveState sets whether the control should save its value and other state information so that if the form is redrawn,
+// the value can be restored.
+//
+// Call this during control initialization to cause the control to remember what it
+// is set to, so that if the user returns to the page, it will keep its value.
+// This function is also responsible for restoring the previously saved state of the control,
+// so call this only after you have set the default state of a control during creation or initialization.
+func (c *ControlBase) SaveState(ctx context.Context, saveIt bool) {
+	c.shouldSaveState = saveIt
+	c.readState(ctx)
+}
+
+// This state is used by controls to restore the visual state of the control if the page is returned to. This is helpful
+// in situations where a control is used to filter what is shown on the page, you zoom into an item, and then return to
+// the parent control. In this situation, you want to see things in the same state they were in, and not have to set up
+// the filter all over again.
+func (c *ControlBase) writeState(ctx context.Context) {
+	var stateStore *stateStoreType
+	var state *stateType
+	var ok bool
+
+	if c.shouldSaveState {
+		state = new(stateType)
+		c.this().MarshalState(state)
+		stateKey := c.Form().ID() + ":" + c.ID()
+		if state.Len() > 0 {
+			state.Set(sessionControlTypeState, c.TypeOf().String()) // so we can make sure the type is the same when we read, in situations where control Ids are dynamic
+			i := session.Get(ctx, sessionControlStates)
+			if i == nil {
+				stateStore = new(stateStoreType)
+				session.Set(ctx, sessionControlStates, stateStore)
+			} else if _, ok = i.(*stateStoreType); !ok {
+				stateStore = new(stateStoreType)
+				session.Set(ctx, sessionControlStates, stateStore)
+			} else {
+				stateStore = i.(*stateStoreType)
+			}
+			stateStore.Set(stateKey, state)
+		}
+	}
+}
+
+// readState is an internal function that will read the state of itself
+func (c *ControlBase) readState(ctx context.Context) {
+	var stateStore *stateStoreType
+	var state *stateType
+	var ok bool
+
+	if c.shouldSaveState {
+		if i := session.Get(ctx, sessionControlStates); i != nil {
+			if stateStore, ok = i.(*stateStoreType); !ok {
+				return
+				// Indicates the entire control state store changed types, so completely ignore it
+			}
+
+			key := c.Form().ID() + ":" + c.ID()
+			i2 := stateStore.Get(key)
+			if state, ok = i2.(*stateType); !ok {
+				return
+				// Indicates This particular item was not stored correctly
+			}
+
+			if typ := state.Get(sessionControlTypeState).(string); typ != c.TypeOf().String() {
+				return // types are not equal, ids must have changed
+			}
+
+			c.this().UnmarshalState(state)
+		}
+	}
+}
+
+// MarshalState is a helper function for control implementations to save their state,
+// so that if the form is reloaded, the value that the user entered will not be lost.
+// Implementing controls should add items to the given map.
+// Note that the control id is used as a key for the state,
+// so that if you are dynamically adding controls, you should make sure you give a specific, non-changing control id
+// to the control, or the state may be lost.
+func (c *ControlBase) MarshalState(m SavedState) {
+}
+
+// UnmarshalState is a helper function for control implementations to retrieve their state from state storage.
+// To implement it, a control should read the data out of the given map.
+// If needed, implement your own version checking scheme.
+// The given map will be guaranteed to have been written out by the same kind of control as the one reading it.
+// Control implementations should be sure to call the superclass version too.
+func (c *ControlBase) UnmarshalState(m SavedState) {
+}
+
 // Serialize encodes the control for the pagecache serializer.
 // Control implementations should call this before their own serialization process.
 func (c *ControlBase) Serialize(e Encoder) {
@@ -1134,9 +1390,6 @@ func (c *ControlBase) Serialize(e Encoder) {
 		panic(err)
 	}
 	if err := e.Encode(c.needsRefresh); err != nil {
-		panic(err)
-	}
-	if err := e.Encode(c.dataConnector); err != nil {
 		panic(err)
 	}
 	if err := e.Encode(c.watchedKeys); err != nil {
@@ -1219,9 +1472,6 @@ func (c *ControlBase) Deserialize(d Decoder) {
 	if err := d.Decode(&c.needsRefresh); err != nil {
 		panic(err)
 	}
-	if err := d.Decode(&c.dataConnector); err != nil {
-		panic(err)
-	}
 	if err := d.Decode(&c.watchedKeys); err != nil {
 		panic(err)
 	}
@@ -1233,11 +1483,11 @@ func (c *ControlBase) Deserialize(d Decoder) {
 func (c *ControlBase) Deserialized() {}
 
 func init() {
-	/*
-		gob.RegisterControl(new(stateType))
-		gob.RegisterControl(new(stateStoreType))
-		gob.RegisterControl(new(maps.Map[string, any]))
-		gob.RegisterControl(new(maps.Map[string, SavedState]))
-		gob.RegisterControl(new(eventMap))
-		gob.RegisterControl(new(map[event.EventID]*event.Event))*/
+	gob.Register(new(ControlBase))
+	gob.Register(new(stateType))
+	gob.Register(new(stateStoreType))
+	gob.Register(new(maps.Map[string, any]))
+	gob.Register(new(maps.Map[string, SavedState]))
+	gob.Register(new(eventMap))
+	gob.Register(new(map[event.EventID]*event.Event))
 }

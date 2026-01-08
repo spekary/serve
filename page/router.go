@@ -19,6 +19,11 @@ func RegisterForm(path string, createFunc FormCreateFunc) {
 	if _, ok := routes[path]; ok {
 		panic("a form for this path is already registered: " + path)
 	}
+	form := createFunc()
+
+	if !controlIsRegistered(form) {
+		RegisterControl(func() ControlI { return createFunc() }) // a form is a control, and needs to be registered for the serializer
+	}
 
 	routes[path] = createFunc
 }

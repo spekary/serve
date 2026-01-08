@@ -260,3 +260,11 @@ func Test_treeNode_AllChildControls(t1 *testing.T) {
 		})
 	}
 }
+
+func init() {
+	gob.Register(new(testForm))
+	gob.Register(new(testControl))
+
+	RegisterControl(func() ControlI { return new(testControl) })
+	RegisterForm("/test", func() FormI { return new(testForm) })
+}

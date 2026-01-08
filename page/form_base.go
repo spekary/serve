@@ -2,6 +2,7 @@ package page
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"io"
 	http2 "net/http"
@@ -24,6 +25,7 @@ var CsrfError = errors.New("csrf error")
 // be overridden.
 type FormI interface {
 	ControlI
+	Page() *Page
 	GetControl(id string) (c ControlI)
 	SetGeneratedIdPrefix(prefix string)
 	GenerateId() string
@@ -55,12 +57,12 @@ type FormBase struct {
 
 	drawing             bool
 	response            Response
-	headerStyleSheets   *headerItem
-	importedStyleSheets *headerItem // when refreshing, these get moved to the headerStyleSheets
-	headerJavaScripts   *headerItem
-	bodyJavaScripts     *headerItem
-	importedJavaScripts *headerItem // when refreshing, these get moved to the bodyJavaScripts
-	csrf                string      // csrf attack check string
+	headerStyleSheets   headerItem
+	importedStyleSheets headerItem // when refreshing, these get moved to the headerStyleSheets
+	headerJavaScripts   headerItem
+	bodyJavaScripts     headerItem
+	importedJavaScripts headerItem // when refreshing, these get moved to the bodyJavaScripts
+	csrf                string     // csrf attack check string
 }
 
 func (f *FormBase) Init(self FormI, id string) {
@@ -225,21 +227,11 @@ func (f *FormBase) DrawHeaderTags(ctx context.Context, w io.Writer) {
 }
 
 func (f *FormBase) mergeInjectedFiles() {
-	if f.importedStyleSheets != nil {
-		if f.headerStyleSheets == nil {
-			f.headerStyleSheets = new(headerItem)
-		}
-		f.headerStyleSheets.Merge(f.importedStyleSheets)
-		f.importedStyleSheets = nil
-	}
+	f.headerStyleSheets.Copy(&f.importedStyleSheets)
+	f.importedStyleSheets.Clear()
 
-	if f.importedJavaScripts != nil {
-		if f.headerJavaScripts == nil {
-			f.headerJavaScripts = new(headerItem)
-		}
-		f.headerJavaScripts.Merge(f.importedJavaScripts)
-		f.importedJavaScripts = nil
-	}
+	f.headerJavaScripts.Copy(&f.importedJavaScripts)
+	f.importedJavaScripts.Clear()
 }
 
 func (f *FormBase) drawBodyScriptFiles(ctx context.Context, w io.Writer) (err error) {
@@ -278,18 +270,12 @@ func (f *FormBase) renderAjax(ctx context.Context, w io.Writer) {
 	}
 
 	// Inject any added style sheets and script files
-	if f.importedStyleSheets != nil {
-		f.importedStyleSheets.Range(func(k string, v html5tag.Attributes) bool {
-			f.response.addStyleSheet(k, v)
-			return true
-		})
+	for k, v := range f.importedStyleSheets.All() {
+		f.response.addStyleSheet(k, v)
 	}
 
-	if f.importedJavaScripts != nil {
-		f.importedJavaScripts.Range(func(k string, v html5tag.Attributes) bool {
-			f.response.addJavaScriptFile(k, v)
-			return true
-		})
+	for k, v := range f.importedJavaScripts.All() {
+		f.response.addJavaScriptFile(k, v)
 	}
 
 	f.mergeInjectedFiles()
@@ -316,4 +302,74 @@ func (f *FormBase) resetAllDrawingFlags() {
 
 func (f *FormBase) setPage(p *Page) {
 	f.page = p
+}
+
+func (f *FormBase) Page() (p *Page) {
+	return f.page
+}
+
+func (f *FormBase) Serialize(e Encoder) {
+	f.ControlBase.Serialize(e)
+	if !config.Release {
+		// The response is currently only changed between posts by the testing framework
+		// If we ever need to change forms using some kind of push mechanism, we will need to serialize
+		// the response.
+		f.response.Serialize(e)
+	}
+
+	if err := e.Encode(&f.headerStyleSheets); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(&f.importedStyleSheets); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(&f.headerJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(&f.bodyJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(&f.importedJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(f.csrf); err != nil {
+		panic(err)
+	}
+}
+
+func (f *FormBase) Deserialize(d Decoder) {
+	f.ControlBase.Deserialize(d)
+
+	if !config.Release {
+		// The response is currently only changed between posts by the testing framework
+		// If we ever need to change forms using some kind of push mechanism, we will need to serialize
+		// the response.
+		f.response.Deserialize(d)
+	}
+
+	if err := d.Decode(&f.headerStyleSheets); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.importedStyleSheets); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.headerJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.bodyJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.importedJavaScripts); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.csrf); err != nil {
+		panic(err)
+	}
+
+	return
+}
+
+func init() {
+	gob.Register(&FormBase{})
+	gob.Register(new(headerItem))
 }

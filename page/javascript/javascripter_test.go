@@ -23,6 +23,7 @@ func TestToJavaScript(t *testing.T) {
 	m2.Set("c", "4")
 
 	m3 := new(maps.SliceMap[string, any])
+	m4 := new(maps.SliceMap[string, string])
 
 	tests := []struct {
 		name string
@@ -41,6 +42,7 @@ func TestToJavaScript(t *testing.T) {
 		{"Empty int map", map[int]interface{}{}, `{}`},
 		{"Empty MapI", m3, `{}`},
 		{"StringMapI", m2, `{"a":"Hi \"","b":"There","c":"4"}`},
+		{"Empty StringMapI", m4, `{}`},
 		{"Int", 1, `1`},
 		{"Null", nil, `null`},
 		{"NewFunctionCall Arguments", Arguments([]interface{}{3, "me"}), `3,"me"`},

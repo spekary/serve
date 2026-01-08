@@ -65,11 +65,9 @@ type Page struct {
 
 	stateId      string // Id in controlCache of the pagestate. Needs to be output by form.
 	renderStatus PageRenderStatus
-	idPrefix     string // For creating unique ids for the app
 
-	form      FormI
-	idCounter int
-	title     string // page title to draw in head tag. There can only be one title.
+	form  FormI
+	title string // page title to draw in head tag. There can only be one title.
 	// base We do not use a "base" header tag, because it can cause problems with anchor tag navigation and is hard to manage
 	charset        string // default is "utf-8"
 	htmlHeaderTags []string
@@ -212,13 +210,7 @@ func (p *Page) Serialize(w io.Writer) {
 	if err := e.Encode(PageCacheVersion); err != nil {
 		panic(err)
 	}
-	if err := e.Encode(p.idCounter); err != nil {
-		panic(err)
-	}
 	if err := e.Encode(p.stateId); err != nil {
-		panic(err)
-	}
-	if err := e.Encode(p.idPrefix); err != nil {
 		panic(err)
 	}
 	if err := e.Encode(p.title); err != nil {
@@ -251,13 +243,7 @@ func (p *Page) Deserialize(r io.Reader) {
 	if err := d.Decode(&PageCacheVersion); err != nil {
 		panic(err)
 	}
-	if err := d.Decode(&p.idCounter); err != nil {
-		panic(err)
-	}
 	if err := d.Decode(&p.stateId); err != nil {
-		panic(err)
-	}
-	if err := d.Decode(&p.idPrefix); err != nil {
 		panic(err)
 	}
 	if err := d.Decode(&p.title); err != nil {

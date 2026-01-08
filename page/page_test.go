@@ -12,8 +12,6 @@ func TestPage_Serialize(t *testing.T) {
 	testPage := new(Page)
 	testPage.BodyAttributes = `class="test"`
 	testPage.stateId = `abcdefg`
-	testPage.idPrefix = `d`
-	testPage.idCounter = 4
 	testPage.title = "My Title"
 	testPage.htmlHeaderTags = []string{`<meta bob="foo">`, `<meta name="mike">'`}
 
