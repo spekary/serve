@@ -10,10 +10,12 @@ import (
 	"reflect"
 
 	"github.com/goradd/base"
-	"github.com/goradd/goradd/pkg/config"
+	"github.com/goradd/goradd/pkg/orm/query"
 	"github.com/goradd/goradd/pkg/stringmap"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
+	"github.com/goradd/serve/config"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
@@ -26,6 +28,8 @@ const sessionControlStates string = "goradd.controlStates"
 const sessionControlTypeState string = "goradd.controlType"
 
 const RequiredErrorMessage string = "A value is required"
+
+const ControlTypeDataAttribute = "grctl"
 
 // ValidationState is used internally by the framework to determine how the control's wrapper handles drawing validation error
 // messages. Different wrappers use it to set classes or attributes of the error message or the overall control.
@@ -173,6 +177,11 @@ type ControlI interface {
 	MarshalState(m SavedState)
 	UnmarshalState(m SavedState)
 
+	// Creator
+
+	ApplyOptions(ctx context.Context, o ControlOptions)
+	AddControls(ctx context.Context, creators ...Creator)
+
 	// package private functions
 
 	doAction(ctx context.Context)
@@ -217,7 +226,10 @@ type ControlBase struct {
 	base.Base
 	treeNode
 
-	// Tag is the tag that will enclose the control, like "div" or "input"
+	// Tag is the tag that will enclose the control, like "div" or "input".
+	// It should only be set during the initialization phase of a control, preferably
+	// immediately after calling Init.
+	// Once the control is drawn, it should not be changed.
 	Tag string
 	// IsVoidTag should be true if the tag should not have a closing tag, like "img"
 	IsVoidTag bool
@@ -300,6 +312,30 @@ type ControlBase struct {
 	// anything added here needs to be also added to the GOB encoder!
 }
 
+// Init initializes a control.
+func (c *ControlBase) Init(self ControlI, parent ControlI, id string) {
+	c.Base.Init(self)
+	var form FormI
+	if parent != nil {
+		form = parent.Form()
+	}
+	c.treeNode.Init(self, form, parent, id)
+	c.needsRefresh = true
+	// parent.Refresh() should we do this automatically, or allow user to control this?
+	c.attributes = html5tag.NewAttributes() // Almost always will have attributes, so create the memory up front
+}
+
+// this supports object-oriented features by giving easy access to the virtual function interface.
+// Subclasses should provide a duplicate. Calls that implement chaining should return the result of this function.
+func (c *ControlBase) this() ControlI {
+	return c.Self().(ControlI)
+}
+
+// initBase is called by the framework during the deserialization process
+func (c *ControlBase) initBase(self ControlI) {
+	c.Base.Init(self)
+}
+
 func (c *ControlBase) SetStyles(style html5tag.Style) {
 	c.attributes.SetStyles(style)
 	c.Refresh() // TODO: Do this with javascript
@@ -364,25 +400,6 @@ func (c *ControlBase) SetText(t string) ControlI {
 func (c *ControlBase) Attributes() html5tag.Attributes {
 	//TODO implement me
 	panic("implement me")
-}
-
-// Init initializes a control
-func (c *ControlBase) Init(tag string, self ControlI, form FormI, parent ControlI, id string) {
-	c.Tag = tag
-	c.Base.Init(self)
-	c.treeNode.Init(self, form, parent, id)
-	c.needsRefresh = true
-}
-
-// this supports object-oriented features by giving easy access to the virtual function interface.
-// Subclasses should provide a duplicate. Calls that implement chaining should return the result of this function.
-func (c *ControlBase) this() ControlI {
-	return c.Self().(ControlI)
-}
-
-// initBase is called by the framework during the deserialization process
-func (c *ControlBase) initBase(self ControlI) {
-	c.Base.Init(self)
 }
 
 // DrawPreRender prepares the control for drawing.
@@ -868,6 +885,86 @@ func (c *ControlBase) DoAction(ctx context.Context, a action.Params) {
 func (c *ControlBase) DoPrivateAction(ctx context.Context, a action.Params) {
 }
 
+// Specifying an action is deprecated. Instead, call Action on the event.
+func (c *ControlBase) On(e *event.Event, a ...action.ActionI) ControlI {
+	c.Refresh() // completely redraw the control. The act of redrawing will turn off old scripts.
+	// TODO: Adding scripts should instead just redraw the associated script block. We will need to
+	// implement a script block with every control connected by id
+	c.eventCounter++
+
+	// Get a new event id
+	for {
+		if _, ok := c.events[c.eventCounter]; ok {
+			c.eventCounter++
+		} else {
+			break
+		}
+	}
+
+	if c.events == nil {
+		c.events = map[event.EventID]*event.Event{}
+	}
+	c.events[c.eventCounter] = e
+
+	event.SetEventID(e, c.eventCounter)
+
+	if len(a) > 1 {
+		e.Action(action.Group(a...))
+	} else if len(a) == 1 {
+		e.Action(a[0])
+	}
+
+	return c.this()
+}
+
+// Off removes all event handlers from the control, or the events with the specified ids.
+func (c *ControlBase) Off(ids ...event.EventID) {
+	if ids == nil {
+		for id, e := range c.events {
+			if !event.IsPrivate(e) {
+				delete(c.events, id)
+			}
+		}
+	} else {
+		for _, id := range ids {
+			if !event.IsPrivate(c.events[id]) {
+				delete(c.events, id)
+			}
+		}
+	}
+}
+
+// PrivateOff removes all private event handlers from the control, or the events with the specified id.
+// This is intended to only be used by control implementations. Do not
+// call this normally.
+func (c *ControlBase) PrivateOff(ids ...event.EventID) {
+	if ids == nil {
+		for id, e := range c.events {
+			if event.IsPrivate(e) {
+				delete(c.events, id)
+			}
+		}
+	} else {
+		for _, id := range ids {
+			if event.IsPrivate(c.events[id]) {
+				delete(c.events, id)
+			}
+		}
+	}
+}
+
+// Event returns the event associated with the eventName, which corresponds to the javascript
+// trigger name. If there are multiple events with the same event name, the first event will
+// be returned. (Multiple events with the same name could be listed if some events have a delay.)
+func (c *ControlBase) Event(eventName string) *event.Event {
+	for _, e := range c.events {
+		if event.Name(e) == eventName {
+			return e
+		}
+	}
+	return nil
+}
+
 // Refresh will force the control to be completely redrawn on the next update.
 func (c *ControlBase) Refresh() {
 	c.needsRefresh = true
@@ -1231,6 +1328,22 @@ func (c *ControlBase) WasRendered() bool {
 	return c.wasRendered
 }
 
+// T sends strings to the translator for translation, and returns the translated string.
+// The language is taken from the session. See the i18n package for more info on that mechanism.
+// Additionally, you can add an i18n.ID() call to add an id to the translation to disambiguate it from similar strings, and
+// you can add an i18n.Comment() call to add an extracted comment for the translators.
+// The message string should be a literal string and not a variable,
+// so that an extractor can extract it from your source to put it into a translation file.
+//
+// Examples:
+//
+//	textbox.T("I have %d things", count, i18n.Comment("This will need multiple translations based on the count value"));
+//	textbox.SetText(textbox.T("S", i18n.ID("SouthInitialism")));
+func (c *ControlBase) T(message string, params ...interface{}) string {
+	p := append([]interface{}{i18n.Language(c.form.LanguageTag())}, params...)
+	return i18n.Translate(message, p...)
+}
+
 // SaveState sets whether the control should save its value and other state information so that if the form is redrawn,
 // the value can be restored.
 //
@@ -1389,7 +1502,7 @@ func (c *ControlBase) Serialize(e Encoder) {
 	if err := e.Encode(c.shouldSaveState); err != nil {
 		panic(err)
 	}
-	if err := e.Encode(c.needsRefresh); err != nil {
+	if err := e.Encode(c.needsRefresh); err != nil { // not sure. Might always be false.
 		panic(err)
 	}
 	if err := e.Encode(c.watchedKeys); err != nil {
@@ -1481,6 +1594,88 @@ func (c *ControlBase) Deserialize(d Decoder) {
 // the internal form pointer has been restored. Use this as an opportunity to recreate
 // any internal pointers a control needs to do its work.
 func (c *ControlBase) Deserialized() {}
+
+// EventList is used by Creators to declare a list of events.
+type EventList []*event.Event
+
+// DataAttributeMap is used by Creators to declare a map of data attributes.
+type DataAttributeMap map[string]interface{}
+
+// Nodes is used by Creators to specify a list of nodes.
+func Nodes(n ...query.NodeI) []query.NodeI {
+	return n
+}
+
+// ControlOptions are options common to all controls
+type ControlOptions struct {
+	// Attributes will set the attributes of the control. Use DataAttributes to set data attributes, Styles to set styles, and Class to set the class
+	Attributes html5tag.Attributes
+	// DataAttributes will set the data-* attributes of the control.
+	DataAttributes DataAttributeMap
+	// Styles sets the styles of the control's tag
+	Styles html5tag.Style
+	// Class sets the class of the control's tag. Prefix a class with "+" to add a class, or "-" to remove a class.
+	Class string
+	// IsDisabled initializes the control in the disabled state, with a "disabled" attribute
+	IsDisabled bool
+	// IsRequired is used by the validator. If a value is required, and the control is empty, it will not pass validation.
+	IsRequired bool
+	// IsHidden initializes this control as hidden. A placeholder will be sent in the html so that when the control is shown through ajax, we will know where to put it.
+	IsHidden bool
+	// On adds events with actions to the control
+	On EventList
+	// DataConnector is the ViewModel layer that moves data between the control and an attached model.
+	//DataConnector DataConnector
+	// WatchedDbTables lets you specify database nodes to watch for changes. When a record in the table is altered, added or deleted,
+	// this control will automatically redraw. To watch a specific record, call WatchDbRecord when you load the control's data.
+	//WatchedDbTables []query.NodeI
+}
+
+// ApplyOptions is called by Creators to apply the default control options.
+func (c *ControlBase) ApplyOptions(ctx context.Context, o ControlOptions) {
+	if o.Attributes != nil {
+		c.MergeAttributes(o.Attributes)
+	}
+	for k, v := range o.DataAttributes {
+		c.SetDataAttribute(k, v)
+	}
+	for k, v := range o.Styles {
+		c.SetStyle(k, v)
+	}
+	for _, a := range o.On {
+		c.On(a)
+	}
+	if o.Class != "" {
+		c.attributes.AddClass(o.Class) // Responds to add and remove class commands
+	}
+	if o.IsDisabled {
+		c.attributes.SetDisabled(o.IsDisabled)
+	}
+	if o.IsRequired {
+		c.isRequired = true
+	}
+	if o.IsHidden {
+		c.isHidden = true
+	}
+	//c.dataConnector = o.DataConnector
+	/*
+		if o.WatchedDbTables != nil {
+			c.WatchDbTables(ctx, o.WatchedDbTables...)
+		}*/
+}
+
+// Creator is the interface all declarative helpers need to implement.
+// It is used to add multiple controls with various settings from a single Go struct.
+type Creator interface {
+	Create(ctx context.Context, parent ControlI) ControlI
+}
+
+// AddControls adds sub-controls to a control using Creator objects
+func (c *ControlBase) AddControls(ctx context.Context, creators ...Creator) {
+	for _, creator := range creators {
+		creator.Create(ctx, c)
+	}
+}
 
 func init() {
 	gob.Register(new(ControlBase))

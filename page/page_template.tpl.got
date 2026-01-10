@@ -10,7 +10,7 @@ import (
 func PageTmpl(ctx context.Context, page *Page, _w io.Writer) (err error) {
 {{
 <!DOCTYPE html>
-<html lang="{{= page.LanguageCode() }}">
+<html lang="{{= page.Form().LanguageCode().String() }}">
 <head>
 {{g page.DrawHeaderTags(ctx, _w) }}
 </head>

@@ -6,12 +6,16 @@ import (
 	"errors"
 	"io"
 	http2 "net/http"
+	"path"
 
-	"github.com/goradd/goradd/pkg/http"
+	"github.com/goradd/goradd/pkg/messageServer"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
 	"github.com/goradd/serve/config"
+	"github.com/goradd/serve/http"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -41,6 +45,11 @@ type FormI interface {
 	Response() *Response
 	PageDrawingFunction() PageDrawFunc
 	DrawHeaderTags(ctx context.Context, w io.Writer)
+	LanguageTag() language.Tag
+
+	AddStyleSheetFile(path string, attributes html5tag.Attributes)
+	AddJavaScriptFile(path string, forceHeader bool, attributes html5tag.Attributes)
+	AddFrameworkFiles()
 
 	renderAjax(ctx context.Context, w io.Writer)
 	addControl(c ControlI)
@@ -61,15 +70,18 @@ type FormBase struct {
 	importedStyleSheets headerItem // when refreshing, these get moved to the headerStyleSheets
 	headerJavaScripts   headerItem
 	bodyJavaScripts     headerItem
-	importedJavaScripts headerItem // when refreshing, these get moved to the bodyJavaScripts
-	csrf                string     // csrf attack check string
+	importedJavaScripts headerItem   // when refreshing, these get moved to the bodyJavaScripts
+	csrf                string       // csrf attack check string
+	language            language.Tag // The i18n language tag matched from the request header and the supported languages.
 }
 
 func (f *FormBase) Init(self FormI, id string) {
 	if id == "" {
 		panic("id is required")
 	}
-	f.ControlBase.Init("form", self, self, nil, id)
+	f.ControlBase.Init(self, nil, id)
+	f.Tag = "form"
+	f.form = self
 }
 
 // SetupNewForm is called by the framework's page router whenever a new URL is loaded.
@@ -79,7 +91,16 @@ func (f *FormBase) SetupNewForm(ctx context.Context) {
 	f.this().AddHeadTags()
 	f.this().CreateControls(ctx)
 	f.this().LoadControls(ctx)
+
+	// Cache and save the language tag for situations
+	// where we do not have the context
+	f.language, _ = i18n.LanguageFromContext(ctx)
 }
+
+func (f *FormBase) LanguageTag() language.Tag {
+	return f.language
+}
+
 func (f *FormBase) GetControl(id string) ControlI {
 	return f.page.getControl(id)
 }
@@ -197,6 +218,114 @@ func (f *FormBase) DrawPreRender(ctx context.Context, w io.Writer) {
 // If you want a custom drawing function for your page, implement this function in your form override.
 func (f *FormBase) PageDrawingFunction() PageDrawFunc {
 	return PageTmpl // Returns the default
+}
+
+// AddRelatedFiles is called by the framework when drawing the form to add JavaScript, style sheets, and other related files
+// to the form.
+//
+// In your override, you would typically call [FormBase.AddJavaScriptFile] and [FormBase.AddStyleSheetFile] to add the files
+// to the form, and then call this parent version of the function to get the default functionality.
+func (f *FormBase) AddRelatedFiles() {
+	f.this().AddFrameworkFiles()
+	if messageServer.Messenger != nil {
+		files := messageServer.Messenger.JavascriptFiles()
+		for file, attr := range files {
+			f.AddJavaScriptFile(file, false, attr)
+		}
+	}
+}
+
+// addGoraddFiles is called by the framework to add the various goradd files to the form.
+func (f *FormBase) AddFrameworkFiles() {
+	f.AddJavaScriptFile(path.Join(config.AssetPath, "goradd", "js", "goradd.js"), false, nil)
+	if !config.Release {
+		f.AddJavaScriptFile(path.Join(config.AssetPath, "goradd", "test", "js", "goradd-test.js"), false, nil)
+	}
+	if config.Debug {
+		f.AddJavaScriptFile(path.Join(config.AssetPath, "goradd", "js", "goradd-debug.js"), false, nil)
+	}
+
+	f.AddStyleSheetFile(path.Join(config.AssetPath, "goradd", "css", "goradd.css"), nil)
+}
+
+// AddJavaScriptFile registers a JavaScript file such that it will get loaded on the page.
+//
+// The path is either a url, or an internal path to the location of the file
+// in the development environment.
+//
+// If forceHeader is true, the file will be listed in the header, which you should only do if the file has some
+// preliminary javascript that needs to be executed before the dom loads.
+// You can specify forceHeader and a "defer" attribute to get the effect of loading the javascript in the background.
+// With forceHeader false, the file will be loaded after
+// the dom is loaded, allowing the browser to show the page and then load the javascript in the background, giving the
+// appearance of a more responsive website. If you add the file during an ajax operation, the file will be loaded
+// dynamically by the goradd javascript. Controls generally should call this during the initial creation of the control if the control
+// requires additional javascript to function.
+//
+// attributes are the attributes that will be included with the script tag, which is useful for things like
+// crossorigin and integrity attributes.
+func (f *FormBase) AddJavaScriptFile(path string, forceHeader bool, attributes html5tag.Attributes) {
+	if forceHeader && f.isOnPage {
+		panic("You cannot force a JavaScript file to be in the header if you insert it after the page is drawn.")
+	}
+
+	if path[:4] != "http" {
+		url := http.GetAssetUrl(path)
+
+		if url == "" {
+			panic(path + " is not in a registered asset directory")
+		}
+		path = url
+	}
+
+	if f.isOnPage {
+		if f.headerJavaScripts.Has(path) ||
+			f.bodyJavaScripts.Has(path) {
+			return // file is already on the page
+		}
+		f.importedJavaScripts.Set(path, attributes)
+	} else if forceHeader {
+		f.headerJavaScripts.Set(path, attributes)
+	} else {
+		f.bodyJavaScripts.Set(path, attributes)
+	}
+}
+
+// AddMasterJavaScriptFile adds a javascript file that is a concatenation of other javascript files the system uses.
+// This allows you to concatenate and minimize all the javascript files you are using without worrying about
+// libraries and controls that are adding the individual files through the AddJavaScriptFile function
+func (f *FormBase) AddMasterJavaScriptFile(url string, attributes []string, files []string) {
+	// TODO
+}
+
+// AddStyleSheetFile registers a StyleSheet file such that it will get loaded on the page.
+// The file will be loaded on the page at initial draw in the header, or will be inserted into the file if the page
+// is already drawn. The path is either a url to an external resource, or a local directory to a resource on disk.
+// Paths must be registered with RegisterAssetDirectory, and will be served from their local location in a development environment,
+// but from the corresponding registered path when deployed.
+//
+// attributes are the attributes that will be included with the link tag, which is useful for things like
+// crossorigin and integrity attributes.
+//
+// To control the cache-control settings on the file, you should call SetCacheControl.
+func (f *FormBase) AddStyleSheetFile(path string, attributes html5tag.Attributes) {
+	if path[:4] != "http" {
+		url := http.GetAssetUrl(path)
+
+		if url == "" {
+			panic(path + " is not in a registered asset directory")
+		}
+		path = url
+	}
+
+	if f.isOnPage {
+		if f.headerStyleSheets.Has(path) {
+			return // the style sheet was already included when the form was loaded the first time
+		}
+		f.importedStyleSheets.Set(path, attributes)
+	} else {
+		f.headerStyleSheets.Set(path, attributes)
+	}
 }
 
 // DrawHeaderTags draws additional header tags for the form.
@@ -335,6 +464,9 @@ func (f *FormBase) Serialize(e Encoder) {
 	if err := e.Encode(f.csrf); err != nil {
 		panic(err)
 	}
+	if err := e.Encode(f.language); err != nil {
+		panic(err)
+	}
 }
 
 func (f *FormBase) Deserialize(d Decoder) {
@@ -363,6 +495,9 @@ func (f *FormBase) Deserialize(d Decoder) {
 		panic(err)
 	}
 	if err := d.Decode(&f.csrf); err != nil {
+		panic(err)
+	}
+	if err := d.Decode(&f.language); err != nil {
 		panic(err)
 	}
 

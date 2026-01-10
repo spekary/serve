@@ -396,7 +396,7 @@ func RenderActions(e *Event, control renderer, eventID EventID) string {
 	js = control.WrapEvent(e.jsEvent, e.selector, js, options)
 
 	// Render a comment
-	js = fmt.Sprintf("/*** Event: %s  ControlBase Type: %T, ControlBase Id: %s  ***/\n%s\n", e.jsEvent, control, control.ID(), js)
+	js = fmt.Sprintf("/*** Event: %s  ControlBase Type: %Translate, ControlBase Id: %s  ***/\n%s\n", e.jsEvent, control, control.ID(), js)
 
 	return js
 }

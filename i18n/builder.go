@@ -1,11 +1,14 @@
 package i18n
 
+import "golang.org/x/text/language"
+
 type translationBuilder struct {
-	domain    string
-	language  string
-	id        string // same as msgctxt in .PO files. Disambiguates same text. Usually blank.
-	message   string
-	arguments []interface{}
+	domain     string
+	language   language.Tag
+	confidence language.Confidence
+	id         string // same as msgctxt in .PO files. Disambiguates same text. Usually blank.
+	message    string
+	arguments  []interface{}
 }
 
 // Build returns a new translation builder.
@@ -20,9 +23,15 @@ func (b *translationBuilder) Domain(domain string) *translationBuilder {
 	return b
 }
 
-// Lang sets the canonical value of the builder
-func (b *translationBuilder) Lang(lang string) *translationBuilder {
+// Language sets the canonical value of the builder
+func (b *translationBuilder) Language(lang language.Tag) *translationBuilder {
 	b.language = lang
+	return b
+}
+
+// Confidence sets the canonical value of the builder
+func (b *translationBuilder) Confidence(c language.Confidence) *translationBuilder {
+	b.confidence = c
 	return b
 }
 
@@ -34,69 +43,50 @@ func (b *translationBuilder) ID(id string) *translationBuilder {
 
 // Comment will add a comment to the extracted translation file, but will otherwise not change the builder
 // Use this to add comments directed to the person doing the translation.
-func (b *translationBuilder) Comment(comment string) *translationBuilder {
+func (b *translationBuilder) Comment(_ string) *translationBuilder {
 	return b
 }
 
-// T ends the builder and performs the translation
-func (b *translationBuilder) T(s string) string {
-	return b.t(s)
+// Translate ends the builder and performs the translation
+func (b *translationBuilder) Translate(s string) string {
+	return b.translate(s)
 }
 
-// Sprintf ends the builder and performs the translation using the given format string.
-func (b *translationBuilder) Sprintf(s string, params ...interface{}) string {
-	b.arguments = params
-	return b.t(s)
-}
-
-func (b *translationBuilder) t(s string) string {
+func (b *translationBuilder) translate(s string) string {
 	if s == "" {
 		return ""
 	}
 	if b.domain == "" {
-		b.domain = ProjectDomain
+		b.domain = AppDomain
 	}
-	if b.language == "" {
-		b.language = langAttributes[0]
+	if b.language == language.Und {
+		b.language = languages[0].Tag
 	}
 	b.message = s
 
 	return translators[b.domain].Translate(b)
 }
 
-// The following are modifiers to the T() function in page.ControlBase
-type id struct {
-	id string
-}
-
-// ID is a parameter you can add to the page.control.T() function to specify a message id. Usually the message id is the
-// same as the string being translated, but when multiple strings are translated that are the same but have different meaning,
-// this will be required. This is used as the msgctxt value in PO files, and is combined with the message to make a composite id
-// in golang translation files. Adding a comment is helpful in these situations.
-func ID(i string) interface{} {
-	return id{i}
-}
-
-type comment struct {
-	comment string
-}
-
-// Comment adds a comment to the translation. It is used in extracted files, but does not impact the translator.
-func Comment(c string) interface{} {
-	return comment{c}
-}
-
-// ExtractBuilderFromArguments will return a new builder, but also will extract any builder-specific commands from the
-// argmument list, assign those to the builder, and then return what is left of the arguments after the extraction.
-func ExtractBuilderFromArguments(args []interface{}) (b *translationBuilder, args2 []interface{}) {
+// extractBuilderFromArguments will return a new builder, but also will extract any builder-specific commands from the
+// argument list, assign those to the builder, and then return what is left of the arguments after the extraction.
+func extractBuilderFromArguments(args []interface{}) (b *translationBuilder) {
 	b = Build()
 	for _, a := range args {
-		if i, ok := a.(id); ok {
-			b.ID(i.id)
-		} else if _, ok := a.(comment); ok {
-			// do nothing
-		} else {
-			args2 = append(args2, a)
+		switch v := a.(type) {
+		case id:
+			b.ID(v.id)
+		case domain:
+			b.Domain(v.domain)
+		case lang:
+			b.Language(v.l)
+		case conf:
+			b.Confidence(v.c)
+
+		case comment:
+		// do thing
+		default:
+			// An Sprintf argument
+			b.arguments = append(b.arguments, a)
 		}
 	}
 	return

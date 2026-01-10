@@ -18,7 +18,7 @@ type treeNoder interface {
 	HasChildControls() bool
 	FindChildControl(id string) ControlI
 
-	childIDs() []string
+	ChildControlIDs() []string
 	parentID() string
 	addChild(treeNoder)
 	removeChild(treeNoder)
@@ -41,7 +41,7 @@ type treeNode struct {
 func (t *treeNode) Init(self ControlI, form FormI, parent treeNoder, id string) {
 	t.form = form
 	if id == "" {
-		id = t.form.GenerateId()
+		id = form.GenerateId()
 	}
 	t.id = id
 	form.addControl(self)
@@ -65,6 +65,7 @@ func (t *treeNode) ParentControl() ControlI {
 // SetParentControl changes the parent control of the control node to newParent.
 // If the control is already in the tree, will remove it from its sibling list.
 // Returns true if data changed.
+// Altered controls are refreshed.
 func (t *treeNode) SetParentControl(newParent treeNoder) bool {
 	if newParent == nil {
 		if t.parentId == "" {
@@ -120,7 +121,8 @@ func (t *treeNode) parentNode() treeNoder {
 	return t.form.GetControl(t.parentId)
 }
 
-func (t *treeNode) childIDs() []string {
+// ChildControlIDs returns the ids of all the child controls in this control
+func (t *treeNode) ChildControlIDs() []string {
 	return t.childIds
 }
 

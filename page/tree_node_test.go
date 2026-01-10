@@ -24,48 +24,49 @@ func newTestForm() FormI {
 	f.Init(f, "testForm")
 	return f
 }
-func newTestControl(form FormI, parent ControlI, id string) ControlI {
+func newTestControl(parent ControlI, id string) ControlI {
 	c := new(testControl)
-	c.Init("div", c, form, parent, id)
+	c.Init(c, parent, id)
+	c.Tag = "div"
 	return c
 }
 
 func Test_treeNode_Init(t *testing.T) {
 	form := newTestForm()
-	c := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, form, "")
-	c3 := newTestControl(form, c, "c3")
+	c := newTestControl(form, "c1")
+	c2 := newTestControl(form, "")
+	c3 := newTestControl(c, "c3")
 
 	assert.Equal(t, "c1", c.ID())
 	assert.Equal(t, "c2", c2.ID(), "skipped already existing control id c1")
-	assert.Len(t, form.childIDs(), 2)
-	assert.Len(t, c.childIDs(), 1)
-	assert.Len(t, c3.childIDs(), 0)
+	assert.Len(t, form.ChildControlIDs(), 2)
+	assert.Len(t, c.ChildControlIDs(), 1)
+	assert.Len(t, c3.ChildControlIDs(), 0)
 
 	assert.Panics(t, func() {
-		newTestControl(form, form, "c3")
+		newTestControl(form, "c3")
 	}, "registering duplicate control")
 }
 
 func Test_treeNode_Detach(t *testing.T) {
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, c1, "c2")
-	c3 := newTestControl(form, c2, "c3")
+	c1 := newTestControl(form, "c1")
+	c2 := newTestControl(c1, "c2")
+	c3 := newTestControl(c2, "c3")
 
 	assert.Equal(t, "c1", c2.parentID())
-	assert.Len(t, c1.childIDs(), 1)
+	assert.Len(t, c1.ChildControlIDs(), 1)
 	c2.Detach()
 	assert.Equal(t, "", c2.parentID())
 	assert.Equal(t, "c2", c3.parentID())
-	assert.Len(t, c3.childIDs(), 0)
+	assert.Len(t, c3.ChildControlIDs(), 0)
 }
 
 func Test_treeNode_SetParent(t *testing.T) {
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, form, "c2")
-	c3 := newTestControl(form, c2, "c3")
+	c1 := newTestControl(form, "c1")
+	c2 := newTestControl(form, "c2")
+	c3 := newTestControl(c2, "c3")
 
 	ret := c3.SetParentControl(c2)
 	assert.False(t, ret)
@@ -74,8 +75,8 @@ func Test_treeNode_SetParent(t *testing.T) {
 	assert.True(t, ret)
 
 	assert.Equal(t, "c1", c3.parentID())
-	assert.Len(t, c1.childIDs(), 1)
-	assert.Len(t, c2.childIDs(), 0)
+	assert.Len(t, c1.ChildControlIDs(), 1)
+	assert.Len(t, c2.ChildControlIDs(), 0)
 
 	// same as Detach()
 	ret = c3.SetParentControl(nil)
@@ -105,7 +106,7 @@ func Test_treeNode_AllChildren(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			form := newTestForm()
 			for _, id := range tt.childIDs {
-				newTestControl(form, form, id)
+				newTestControl(form, id)
 			}
 
 			gotNodes := slices.Collect(form.ChildControls())
@@ -195,7 +196,7 @@ func Test_treeNode_Coverage(t *testing.T) {
 	// Basic tests for code coverage
 
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
+	c1 := newTestControl(form, "c1")
 	assert.Equal(t, form, c1.Form())
 	assert.Equal(t, form, c1.ParentControl())
 	assert.True(t, form.HasChildControls())
@@ -208,11 +209,11 @@ func Test_treeNode_Coverage(t *testing.T) {
 
 func Test_treeNode_AllChildControls(t1 *testing.T) {
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, form, "c2")
-	_ = newTestControl(form, c1, "")
-	_ = newTestControl(form, c2, "")
-	c22 := newTestControl(form, c2, "")
+	c1 := newTestControl(form, "c1")
+	c2 := newTestControl(form, "c2")
+	_ = newTestControl(c1, "")
+	_ = newTestControl(c2, "")
+	c22 := newTestControl(c2, "")
 
 	var count int
 	for c := range form.AllChildControls() {

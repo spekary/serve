@@ -59,7 +59,7 @@ func ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		_, _ = io.WriteString(w, `{"loc":"reload"}`) // the refresh will be handled in javascript
 		return
 	}
-
+	
 	err = page.runPage(ctx, w)
 	if err != nil {
 		// TODO: remove this. All errors should panic in place so we can know where the problem is

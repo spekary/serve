@@ -2,15 +2,24 @@ package i18n
 
 import (
 	"context"
+	"net/http"
 
-	"github.com/goradd/goradd/pkg/goradd"
-	"github.com/goradd/goradd/pkg/session"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
 )
 
 // ServerLanguageEntry is a description of a supported language from the server's perspective. It includes the
 // information the server will need to describe the language to the browser and to do the translation.
+//
+// Set the dictionary from the list of available dictionaries. This will cause only that dictionary to
+// be compiled in, and the linker will then remove the others.
+//
+// Example:
+//
+//	SetSupportedLanguages (
+//	  {Tag: language.AmericanEnglish, Dict: display.English},
+//	  {Tag: language.German, Dict: display.German},
+//	)
 type ServerLanguageEntry struct {
 	// Tag is the language tag for the language
 	Tag language.Tag
@@ -20,114 +29,110 @@ type ServerLanguageEntry struct {
 	LangString string
 }
 
-// languages is the list of languages that the application supports. By default we just support English, but you can
-// change it to what you want
-var languages = []language.Tag{
-	language.AmericanEnglish, // first one is the default
-}
-
-// dictionaries are corresponding dictionaries
-var dictionaries = []*display.Dictionary{
-	display.English, // first one is the default
-}
-
-// langAttributes are the corresponding lang attributes to put in the html tag. This should be the canonical value of the language.
-var langAttributes = []string{
-	"en", // first one is the default
+var languages = []ServerLanguageEntry{
+	{Tag: language.AmericanEnglish, Dict: display.English, LangString: "en-US"},
 }
 
 var matcher = language.NewMatcher([]language.Tag{language.AmericanEnglish})
 
-// SetSupportedLanguages sets up the languages that the application supports. It expects both a list of language
-// tags and a matching list of dictionaries. You should only call this during application startup to inject your
+// SetSupportedLanguages sets up the languages that the application supports.
+// You should only call this during application startup to inject your
 // list of supported languages into the application.
+// The first entry will be the default when no language information is
+// available.
+// Be sure these are canonicalized. Using the language tag constants will
+// do that automatically, but if you use user text to create these language
+// tags, be sure to call Canonicalize() on them.
 func SetSupportedLanguages(l ...ServerLanguageEntry) {
 	if len(l) < 1 {
 		panic("you must have at least one language")
 	}
-	languages = make([]language.Tag, len(l))
-	dictionaries = make([]*display.Dictionary, len(l))
-	langAttributes = make([]string, len(l))
+	langTags := make([]language.Tag, len(l))
+	languages = l
 
 	for i, e := range l {
-		languages[i] = e.Tag
-		dictionaries[i] = e.Dict
+		langTags[i] = e.Tag
 		if e.LangString == "" {
-			langAttributes[i] = e.Tag.String()
-		} else {
-			langAttributes[i] = e.LangString
+			e.LangString = e.Tag.String()
 		}
 	}
 
-	// Setup a new matcher. Go doc says that matcher is optimized for runtime at the expense of init time.
-	matcher = language.NewMatcher(languages)
+	// Set up a new matcher. Go doc says that matcher is optimized for runtime at the expense of init time.
+	matcher = language.NewMatcher(langTags)
 }
 
-// SupportedLanguages is returuned by GetSupported
-type SupportedLanguages []struct {
+func defaultLanguage() language.Tag {
+	return languages[0].Tag
+}
+
+// LanguageNames describes a local name and native name for a language.
+type LanguageNames struct {
 	LocalName  string
 	NativeName string
 }
 
-// GetSupportedLanguages returns a slice of the supported languages, in both the language indicated and the native
-// representation of the name of that language. You could use this to present a menu to the user. The order is the
-// same as the ServerLanguages and ServerDictionaries
-func GetSupportedLanguages(t language.Tag) SupportedLanguages {
-	_, i, _ := matcher.Match(t)
-
-	d := dictionaries[i]
-	l := d.Languages()
-	s := make(SupportedLanguages, len(languages))
+// SupportedLanguageNames returns a slice of the supported languages, in both the language indicated and the native
+// representation of the name of that language.
+// You could use this to present a menu to the user. T
+func SupportedLanguageNames(t language.Tag) []LanguageNames {
+	s := make([]LanguageNames, len(languages))
 
 	for i, t := range languages {
-		s[i].LocalName = l.Name(t)
+		s[i].LocalName = t.Dict.Languages().Name(t)
 		s[i].NativeName = display.Self.Name(t)
 	}
 
 	return s
 }
 
-// SetDefaultLanguage is called by the framework to set up the session variable with a default language if one has not
-// yet been set. The default language is based on the "accept-language" header value and the list of languages that
-// the application supports.
-func SetDefaultLanguage(ctx context.Context, acceptLanguageValue string) int {
-	if !session.Has(ctx, goradd.SessionLanguage) {
-		tags, _, err := language.ParseAcceptLanguage(acceptLanguageValue)
-		if err != nil {
-			_, i, _ := matcher.Match(tags...)
-			session.SetInt(ctx, goradd.SessionLanguage, i)
-			return i
-		}
+// MatchAcceptedLanguage converts and "accept-language" header value into an index into
+// the list of supported languages.
+//
+// Returns zero if an error occurs.
+func MatchAcceptedLanguage(acceptLanguageValue string) (tag language.Tag, index int, confidence language.Confidence) {
+	tags, _, err := language.ParseAcceptLanguage(acceptLanguageValue)
+	if err != nil {
+		t, i, c := matcher.Match(tags...)
+		return t, i, c
 	}
-	return 0
+	return defaultLanguage(), 0, 0
 }
 
-// Call SetLanguage to set the user's language to a specific language from the list of supported languages.
-func SetLanguage(ctx context.Context, i int) {
-	if i >= len(languages) || i < 0 {
-		panic("invalid language setting")
+type langKey struct{}
+
+func WithLanguage(ctx context.Context, acceptLanguageValue string) context.Context {
+	if acceptLanguageValue == "" {
+		return ctx
 	}
-	session.SetInt(ctx, goradd.SessionLanguage, i)
+	t, _, _ := MatchAcceptedLanguage(acceptLanguageValue)
+	return context.WithValue(ctx, langKey{}, t)
 }
 
-func CurrentLanguageAttribute(ctx context.Context) string {
-	v := session.GetInt(ctx, goradd.SessionLanguage)
-	return langAttributes[v]
+// LanguageFromContext returns the language.Tag value for the selected
+// language that was injected using WithLanguage or LanguageHandler.
+//
+// If no language value is detected or there is an error, then the default
+// language and false will be returned.
+func LanguageFromContext(ctx context.Context) (language.Tag, bool) {
+	contextVal := ctx.Value(langKey{})
+	if contextVal == nil {
+		return contextVal.(language.Tag), true
+	}
+	return defaultLanguage(), false
 }
 
-// CurrentLanguage returns the ordinal value of the current language, and the canonical value
-// If the language setting is not yet set, it returns the default language
-func CurrentLanguage(ctx context.Context) (int, string) {
-	v := session.GetInt(ctx, goradd.SessionLanguage)
-	return v, langAttributes[v]
-}
-
-// CanonicalValue will return the canonical value of the language at the given position
-func CanonicalValue(i int) string {
-	return langAttributes[i]
-}
-
-// Tag returns the language tag corresponding to the given language position
-func Tag(i int) language.Tag {
-	return languages[i]
+// LanguageHandler is middleware that detects the language of the request
+// and inserts a context value corresponding to the closest supported
+// language.
+//
+// Use SetSupportedLanguages to set those languages.
+// Retrieve the value using LanguageFromContext.
+func LanguageHandler(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		ctx = WithLanguage(ctx, r.Header.Get("Accept-Language"))
+		r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }

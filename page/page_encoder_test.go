@@ -13,7 +13,7 @@ import (
 )
 */
 /*
-func TestEmptyFormEncoding(t *testing.T) {
+func TestEmptyFormEncoding(t *testing.Translate) {
 	var form = page.FormBase{}
 	var b bytes.Buffer
 
@@ -54,7 +54,7 @@ func (f *BasicForm) CreateControls(ctx context.Context) {
 	f.S = "test"
 }
 
-func TestBasicFormEncoding(t *testing.T) {
+func TestBasicFormEncoding(t *testing.Translate) {
 	var form = CreateBasicForm(nil)
 	var b bytes.Buffer
 

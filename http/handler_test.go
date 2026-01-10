@@ -110,7 +110,7 @@ func Test_AppRegistrations(t *testing.T) {
 }
 
 /*
-func Test_PathRegistrations(t *testing.T) {
+func Test_PathRegistrations(t *testing.Translate) {
 	clearGlobals()
 	fnFound := func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "Found")
@@ -151,7 +151,7 @@ func Test_PathRegistrations(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
+		t.Run(tt.path, func(t *testing.Translate) {
 			req := httptest.NewRequest("GET", tt.path, nil)
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, req)
@@ -177,7 +177,7 @@ func drawTestErr(ctx context.Context, w io.Writer) (err error) {
 	return fmt.Errorf("testErr")
 }
 
-func TestRegisterDrawFunc(t *testing.T) {
+func TestRegisterDrawFunc(t *testing.Translate) {
 	fnNotFound := func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "Not Found")
 	}

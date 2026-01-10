@@ -1,0 +1,120 @@
+package column
+
+import (
+	"context"
+
+	table2 "github.com/goradd/serve/control/table"
+	"github.com/goradd/serve/page/event"
+
+	"github.com/goradd/goradd/pkg/javascript"
+	"github.com/goradd/html5tag"
+	"github.com/goradd/serve/page"
+)
+
+// ButtonColumnClick returns an event that detects a click on the icon in the column.
+// The EventValue will be the row value clicked on.
+// If you need to also know the column clicked on, you can set the EventValue on the associated action to:
+//
+//	javascript.JsCode(`g$(event.goradd.match).columnId()`)
+//
+// and then get the value from the EventValue.
+func ButtonColumnClick() *event.Event {
+	e := event.Click().
+		Selector("[data-gr-btn-col]").
+		EventValue(javascript.JsCode(
+			`g$(event.goradd.match).closest("tr").data("value")`,
+		))
+	return e
+}
+
+// ButtonColumn is a column that draws a button that fires the ButtonColumnClick event.
+type ButtonColumn struct {
+	table2.ColumnBase
+	buttonHtml       string
+	buttonAttributes html5tag.Attributes
+}
+
+// NewButtonColumn creates a new button column.
+func NewButtonColumn() *ButtonColumn {
+	i := new(ButtonColumn)
+	i.Init(i)
+	return i
+}
+
+func (c *ButtonColumn) Init(self table2.ColumnI) {
+	c.ColumnBase.Init(self)
+	c.buttonHtml = `&#9998` // default to a standard pencil icon
+	c.buttonAttributes = html5tag.NewAttributes().
+		AddClass("gr-transparent-btn") // style so button part does not show, only the icon
+	c.SetIsHtml(true)
+}
+
+// ButtonAttributes returns the attributes of the button. You can directly manipulate those.
+func (c *ButtonColumn) ButtonAttributes() html5tag.Attributes {
+	return c.buttonAttributes
+}
+
+func (c *ButtonColumn) CellData(ctx context.Context, row int, col int, data interface{}) interface{} {
+	c.buttonAttributes.SetData("grBtnCol", "1") // make sure we are tagged so event will fire
+	return html5tag.RenderTag("button", c.buttonAttributes, c.buttonHtml)
+}
+
+func (c *ButtonColumn) Serialize(e page.Encoder) {
+	c.ColumnBase.Serialize(e)
+	if err := e.Encode(c.buttonHtml); err != nil {
+		panic(err)
+	}
+	if err := e.Encode(c.buttonAttributes); err != nil {
+		panic(err)
+	}
+}
+
+// SetButtonHtml sets the html to use inside the button. By default a pencil is drawn.
+// Use `<i class="fas fa-edit" aria-hidden="true"></i>` for a font awesome edit icon
+func (c *ButtonColumn) SetButtonHtml(h string) {
+	c.buttonHtml = h
+}
+
+func (c *ButtonColumn) Deserialize(dec page.Decoder) {
+	c.ColumnBase.Deserialize(dec)
+
+	if err := dec.Decode(&c.buttonHtml); err != nil {
+		panic(err)
+	}
+	if err := dec.Decode(&c.buttonAttributes); err != nil {
+		panic(err)
+	}
+}
+
+// ButtonColumnCreator creates a column that displays a clickable icon.
+type ButtonColumnCreator struct {
+	// ID will assign the given id to the column. If you do not specify it, an id will be given it by the framework.
+	ID string
+	// Title is the static title string to use in the header row
+	Title string
+	// ButtonHtml specifies the html to put inside the button
+	ButtonHtml string
+	// ButtonAttributes lets you set the button attributes how you want.
+	ButtonAttributes html5tag.Attributes
+	table2.ColumnOptions
+}
+
+func (c ButtonColumnCreator) Create(ctx context.Context, parent table2.TableI) table2.ColumnI {
+	col := NewButtonColumn()
+	if c.ID != "" {
+		col.SetID(c.ID)
+	}
+	col.SetTitle(c.Title)
+	if c.ButtonHtml != "" {
+		col.SetButtonHtml(c.ButtonHtml)
+	}
+	if c.ButtonAttributes != nil {
+		col.buttonAttributes = c.ButtonAttributes
+	}
+	col.ApplyOptions(ctx, parent, c.ColumnOptions)
+	return col
+}
+
+func init() {
+	table2.RegisterColumn(ButtonColumn{})
+}

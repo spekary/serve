@@ -34,3 +34,7 @@ var CacheBusterPrefix = "gr."
 // DefaultPage is the default path of a url that ends with "/". Specify an empty string
 // to have no default pages.
 var DefaultPage = "index.html"
+
+// Minify will cause some html to be more efficient.
+// In particular, html comments will not be inserted to describe the structure of the generated page.
+var Minify = false

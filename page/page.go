@@ -13,7 +13,6 @@ import (
 	"io"
 	http2 "net/http"
 
-	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
 )
 
@@ -301,12 +300,6 @@ func (p *Page) PushRedraw() {
 	}
 }
 */
-
-// LanguageCode returns the language code that will be put in the lang attribute of the html tag.
-// It is taken from the i18n package.
-func (p *Page) LanguageCode() string {
-	return i18n.CanonicalValue(p.language)
-}
 
 // Deserialized is called immediately after the page has been deserialized, to fix up decoded controls.
 func (p *Page) Deserialized() {

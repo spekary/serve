@@ -8,6 +8,7 @@ import (
 	"github.com/alexedwards/scs/v2/memstore"
 	"github.com/goradd/serve/config"
 	http2 "github.com/goradd/serve/http"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/messenger"
 	"github.com/goradd/serve/messenger/ws"
 	"github.com/goradd/serve/page"
@@ -64,6 +65,7 @@ func (a *ServerBase) MakeHandler() http.Handler {
 	h = http2.WithPatternMuxer(h) // Serves most static files and websocket requests.
 	// Must be after the error handler so panics are intercepted by the error reporter
 	// and must be in front of the buffered output handler because of the websocket server
+	h = i18n.LanguageHandler(h) // observe the accept-language header value
 	h = http2.WithHeaderValidator(h)
 	h = http2.WithErrorHandler(h) // Default http error handler to intercept panics.
 	h = a.WithHsts(h)

@@ -9,3 +9,19 @@ package config
 // Combine with the nodebug tag like so: go build -tags "release nodebug"
 // You might build a release version that keeps the debug features on if you are building for manual testers
 const Release = true
+
+func SetProjectDir(path string) {
+	panic("do not call SetProjectDir in the Release build")
+}
+
+// This is here just to allow things to build, but should not be called
+func ProjectDir() string {
+	panic("do not call ProjectDir in the Release build")
+	return ""
+}
+
+// This is here just to allow things to build, but should not be called
+func GoraddDir() string {
+	panic("do not call GoraddDir in Release build")
+	return ""
+}
