@@ -26,7 +26,7 @@ func NewPasswordTextbox(parent page.ControlI, id string) *PasswordTextbox {
 }
 
 // Init is called by the framework to initialize the control. Only subclasses need to call it.
-func (t *PasswordTextbox) Init(self any, parent page.ControlI, id string) {
+func (t *PasswordTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Textbox.Init(self, parent, id)
 	t.SetAttribute("autocomplete", "off")
 	t.SetType(PasswordType)
@@ -98,9 +98,10 @@ func (c PasswordTextboxCreator) Init(ctx context.Context, ctrl PasswordI) {
 
 // GetPasswordTextbox is a convenience method to return the control with the given id from the page.
 func GetPasswordTextbox(c page.ControlI, id string) *PasswordTextbox {
-	return c.Page().GetControl(id).(*PasswordTextbox)
+	pt, _ := c.Form().GetControl(id).(*PasswordTextbox)
+	return pt
 }
 
 func init() {
-	page.RegisterControl(&PasswordTextbox{})
+	page.RegisterControl(func() page.ControlI { return new(PasswordTextbox) })
 }

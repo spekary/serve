@@ -33,7 +33,7 @@ func NewActiveLink(parent page.ControlI, id string) *ActiveLink {
 }
 
 // Init is called by subclasses of ActiveLink to initialize the link control structure.
-func (l *ActiveLink) Init(self any, parent page.ControlI, id string) {
+func (l *ActiveLink) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.Link.Init(self, parent, id)
 }
 
@@ -144,7 +144,8 @@ func (c ActiveLinkCreator) Init(ctx context.Context, ctrl ActiveLinkI) {
 
 // GetActiveLink is a convenience method to return the link with the given id from the page.
 func GetActiveLink(c page.ControlI, id string) *ActiveLink {
-	return c.Form().GetControl(id).(*ActiveLink)
+	l, _ := c.Form().GetControl(id).(*ActiveLink)
+	return l
 }
 
 func init() {

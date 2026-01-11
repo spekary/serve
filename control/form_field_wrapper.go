@@ -356,7 +356,8 @@ func (f FormFieldWrapperCreator) Init(ctx context.Context, c FormFieldWrapperI) 
 
 // GetFormFieldWrapper is a convenience method to return the form field with the given id from the page.
 func GetFormFieldWrapper(c page.ControlI, id string) *FormFieldWrapper {
-	return c.Form().GetControl(id).(*FormFieldWrapper)
+	ffw, _ := c.Form().GetControl(id).(*FormFieldWrapper)
+	return ffw
 }
 
 // GetCreatorID uses reflection to get the id of the given creator.

@@ -1,4 +1,4 @@
-package button
+package custom
 
 import (
 	"context"
@@ -78,11 +78,11 @@ func NewFileSelect(parent page.ControlI, id string) *FileSelect {
 }
 
 // Init is called by subclasses of Button to initialize the button control structure.
-func (b *FileSelect) Init(self any, parent page.ControlI, id string) {
+func (b *FileSelect) Init(self page.ControlI, parent page.ControlI, id string) {
 	b.ControlBase.Init(self, parent, id)
 	b.Tag = "input"
 	b.SetAttribute("type", "file")
-	b.ParentForm().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "js", "file_select.js"), false, nil)
+	b.Form().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "js", "file_select.js"), false, nil)
 }
 
 // SetMultiple controls whether the button allows multiple file selections.

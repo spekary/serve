@@ -54,7 +54,7 @@ func NewRadioList(parent page.ControlI, id string) *RadioList {
 }
 
 // Init is called by subclasses.
-func (l *RadioList) Init(self any, parent page.ControlI, id string) {
+func (l *RadioList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.SelectList.Init(self, parent, id)
 	l.Tag = "div"
 	l.rowClass = "gr-cbl-row"
@@ -200,10 +200,10 @@ func renderCell(item *Item, controlHtml string, hasColumns bool) string {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (l *RadioList) UpdateFormValues(ctx context.Context) {
+func (l *RadioList) UpdateFormValues(request *page.RequestContext) {
 	controlID := l.ID()
 
-	if v, ok := page.GetContext(ctx).FormValue(controlID); ok {
+	if v, ok := request.FormValue(controlID); ok {
 		l.selectedValue = v
 	}
 }
@@ -291,7 +291,7 @@ func (c RadioListCreator) Init(ctx context.Context, ctrl RadioListI) {
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 	if c.ColumnCount != 0 {
@@ -308,7 +308,7 @@ func (c RadioListCreator) Init(ctx context.Context, ctrl RadioListI) {
 		ctrl.SetRowClass(c.RowClass)
 	}
 	if c.OnChange != nil {
-		ctrl.On(event.Change().Selector("input"), c.OnChange)
+		ctrl.On(event.Change().Selector("input").Action(c.OnChange))
 	}
 	ctrl.ApplyOptions(ctx, c.ControlOptions)
 	if c.SaveState {
@@ -318,9 +318,10 @@ func (c RadioListCreator) Init(ctx context.Context, ctrl RadioListI) {
 
 // GetRadioList is a convenience method to return the control with the given id from the page.
 func GetRadioList(c page.ControlI, id string) *RadioList {
-	return c.Page().GetControl(id).(*RadioList)
+	rl, _ := c.Form().GetControl(id).(*RadioList)
+	return rl
 }
 
 func init() {
-	page.RegisterControl(&RadioList{})
+	page.RegisterControl(func() page.ControlI { return new(RadioList) })
 }

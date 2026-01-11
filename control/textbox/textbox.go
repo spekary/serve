@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/serve/i18n"
 
 	"github.com/goradd/goradd/pkg/config"
 	"github.com/goradd/html5tag"
@@ -90,7 +91,7 @@ func NewTextbox(parent page.ControlI, id string) *Textbox {
 }
 
 // Init initializes a Textbox. Normally you will not call this directly.
-func (t *Textbox) Init(self any, parent page.ControlI, id string) {
+func (t *Textbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.ControlBase.Init(self, parent, id)
 
 	t.Tag = "input"
@@ -293,7 +294,7 @@ func (t *Textbox) Validate(ctx context.Context) bool {
 	text := t.Text()
 	if t.IsRequired() && text == "" {
 		if t.ErrorForRequired == "" {
-			t.SetValidationError(t.GT("A value is required"))
+			t.SetValidationError(t.T("A value is required", i18n.Domain(i18n.FrameworkDomain)))
 		} else {
 			t.SetValidationError(t.ErrorForRequired)
 		}
@@ -312,7 +313,7 @@ func (t *Textbox) Validate(ctx context.Context) bool {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (t *Textbox) UpdateFormValues(ctx context.Context) {
+func (t *Textbox) UpdateFormValues(request *page.RequestContext) {
 	if t.readonly {
 		// This would happen if someone was attempting to hack the browser.
 		return
@@ -320,7 +321,7 @@ func (t *Textbox) UpdateFormValues(ctx context.Context) {
 
 	id := t.ID()
 
-	if v, ok := page.GetContext(ctx).FormValue(id); ok {
+	if v, ok := request.FormValue(id); ok {
 		t.value = t.this().Sanitize(v)
 	}
 }
@@ -404,7 +405,7 @@ func (v MinLengthValidator) Validate(c page.ControlI, s string) (msg string) {
 	}
 	if len(s) < v.Length {
 		if v.Message == "" {
-			return fmt.Sprintf(c.GT("Enter at least %d characters"), v.Length) // not a great translation, probably should be an Sprintf implementation
+			return fmt.Sprintf(c.T("Enter at least %d characters", i18n.Domain(i18n.FrameworkDomain)), v.Length) // not a great translation, probably should be an Sprintf implementation
 		} else {
 			return v.Message
 		}
@@ -425,7 +426,7 @@ func (v MaxLengthValidator) Validate(c page.ControlI, s string) (msg string) {
 	}
 	if len(s) > v.Length {
 		if v.Message == "" {
-			return fmt.Sprintf(c.GT("Enter at most %d characters"), v.Length)
+			return fmt.Sprintf(c.T("Enter at most %d characters", i18n.Domain(i18n.FrameworkDomain)), v.Length)
 		} else {
 			return v.Message
 		}
@@ -514,16 +515,19 @@ func (c TextboxCreator) Init(ctx context.Context, ctrl TextboxI) {
 
 // GetTextbox is a convenience method to return the control with the given id from the page.
 func GetTextbox(c page.ControlI, id string) *Textbox {
-	return c.Page().GetControl(id).(*Textbox)
+	tb, _ := c.Form().GetControl(id).(*Textbox)
+	return tb
 }
 
 func GetTextboxI(c page.ControlI, id string) TextboxI {
-	return c.Page().GetControl(id).(TextboxI)
+	tb, _ := c.Form().GetControl(id).(TextboxI)
+	return tb
 }
 
 func init() {
 	// gob.Register(&Textbox{}) register control.Textbox instead
 	gob.Register(MaxLengthValidator{})
 	gob.Register(MinLengthValidator{})
-	page.RegisterControl(&Textbox{})
+
+	page.RegisterControl(func() page.ControlI { return new(Textbox) })
 }

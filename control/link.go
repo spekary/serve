@@ -113,7 +113,8 @@ func (c LinkCreator) Init(ctx context.Context, ctrl LinkI) {
 
 // GetLink is a convenience method to return the link with the given id from the page.
 func GetLink(c page.ControlI, id string) *Link {
-	return c.Form().GetControl(id).(*Link)
+	l, _ := c.Form().GetControl(id).(*Link)
+	return l
 }
 
 func init() {

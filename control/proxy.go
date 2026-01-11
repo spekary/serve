@@ -210,7 +210,8 @@ func (c ProxyCreator) Create(ctx context.Context, parent page.ControlI) page.Con
 
 // GetProxy is a convenience method to return the button with the given id from the page.
 func GetProxy(c page.ControlI, id string) *Proxy {
-	return c.Form().GetControl(id).(*Proxy)
+	p, _ := c.Form().GetControl(id).(*Proxy)
+	return p
 }
 
 func init() {

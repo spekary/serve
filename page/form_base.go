@@ -81,7 +81,6 @@ func (f *FormBase) Init(self FormI, id string) {
 	}
 	f.ControlBase.Init(self, nil, id)
 	f.Tag = "form"
-	f.form = self
 }
 
 // SetupNewForm is called by the framework's page router whenever a new URL is loaded.

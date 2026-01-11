@@ -10,6 +10,7 @@ import (
 	reflect2 "github.com/goradd/goradd/pkg/any"
 	"github.com/goradd/html5tag"
 	control2 "github.com/goradd/serve/control"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
 )
 
@@ -35,7 +36,7 @@ func NewMultiselectList(parent page.ControlI, id string) *MultiselectList {
 	return l
 }
 
-func (l *MultiselectList) Init(self any, parent page.ControlI, id string) {
+func (l *MultiselectList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.ControlBase.Init(self, parent, id)
 	l.List = NewList(l)
 	l.selectedValues = map[string]bool{}
@@ -68,7 +69,7 @@ func (l *MultiselectList) Size() int {
 func (l *MultiselectList) Validate(_ context.Context) bool {
 	if l.IsRequired() && len(l.selectedValues) == 0 {
 		if l.ErrorForRequired == "" {
-			l.SetValidationError(l.GT("A selection is required"))
+			l.SetValidationError(l.T("A selection is required", i18n.Domain(i18n.FrameworkDomain)))
 		} else {
 			l.SetValidationError(l.ErrorForRequired)
 		}
@@ -78,10 +79,10 @@ func (l *MultiselectList) Validate(_ context.Context) bool {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (l *MultiselectList) UpdateFormValues(ctx context.Context) {
+func (l *MultiselectList) UpdateFormValues(request *page.RequestContext) {
 	id := l.ID()
 
-	if a, ok := page.GetContext(ctx).FormValues(id); ok {
+	if a, ok := request.FormValues(id); ok {
 		l.selectedValues = map[string]bool{}
 		for _, v := range a {
 			l.selectedValues[v] = true
@@ -342,7 +343,7 @@ func (c MultiselectListCreator) Create(ctx context.Context, parent page.ControlI
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 
@@ -358,9 +359,10 @@ func (c MultiselectListCreator) Create(ctx context.Context, parent page.ControlI
 
 // GetMultiselectList is a convenience method to return the control with the given id from the page.
 func GetMultiselectList(c page.ControlI, id string) *MultiselectList {
-	return c.Page().GetControl(id).(*MultiselectList)
+	ms, _ := c.Form().GetControl(id).(*MultiselectList)
+	return ms
 }
 
 func init() {
-	page.RegisterControl(&MultiselectList{})
+	page.RegisterControl(func() page.ControlI { return new(MultiselectList) })
 }

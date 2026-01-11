@@ -53,7 +53,7 @@ func (c *RadioButton) SetChecked(v bool) RadioButtonI {
 			// separate radio buttons in a group, we are not going to worry about it for now. It if becomes an issue,
 			// the code would need to change to look through the forms control list for other buttons in the group, and
 			// update those buttons in the go code here.
-			c.ParentForm().Response().ExecuteJsFunction("goradd.setRadioInGroup", page.PriorityStandard, c.ID())
+			c.Form().Response().ExecuteJsFunction("goradd.setRadioInGroup", page.PriorityStandard, c.ID())
 		}
 	} else {
 		c.CheckboxBase.SetChecked(v)
@@ -76,8 +76,8 @@ func (c *RadioButton) DrawingAttributes(ctx context.Context) html5tag.Attributes
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (c *RadioButton) UpdateFormValues(ctx context.Context) {
-	c.UpdateRadioFormValues(ctx, c.Group())
+func (c *RadioButton) UpdateFormValues(request *page.RequestContext) {
+	c.UpdateRadioFormValues(request, c.Group())
 }
 
 func (l *RadioButton) Serialize(e page.Encoder) {
@@ -138,9 +138,10 @@ func (c RadioButtonCreator) Create(ctx context.Context, parent page.ControlI) pa
 
 // GetRadioButton is a convenience method to return the radio button with the given id from the page.
 func GetRadioButton(c page.ControlI, id string) *RadioButton {
-	return c.Page().GetControl(id).(*RadioButton)
+	rb, _ := c.Form().GetControl(id).(*RadioButton)
+	return rb
 }
 
 func init() {
-	page.RegisterControl(&RadioButton{})
+	page.RegisterControl(func() page.ControlI { return new(RadioButton) })
 }

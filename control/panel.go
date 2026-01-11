@@ -117,8 +117,10 @@ func (c PanelCreator) Init(ctx context.Context, ctrl PanelI) {
 }
 
 // GetPanel is a convenience method to return the panel with the given id from the page.
+// Returns nil if the control does not exist, or the control is not a Panel.
 func GetPanel(c page.ControlI, id string) *Panel {
-	return c.Form().GetControl(id).(*Panel)
+	p, _ := c.Form().GetControl(id).(*Panel)
+	return p
 }
 
 func init() {

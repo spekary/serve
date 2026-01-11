@@ -39,7 +39,7 @@ func NewOrderedList(parent page.ControlI, id string) *OrderedList {
 	return t
 }
 
-func (l *OrderedList) Init(self any, parent page.ControlI, id string) {
+func (l *OrderedList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.UnorderedList.Init(self, parent, id)
 	l.Tag = "ol"
 }
@@ -138,7 +138,7 @@ func (c OrderedListCreator) Init(ctx context.Context, ctrl OrderedListI) {
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 
@@ -153,9 +153,10 @@ func (c OrderedListCreator) Init(ctx context.Context, ctrl OrderedListI) {
 
 // GetOrderedList is a convenience method to return the control with the given id from the page.
 func GetOrderedList(c page.ControlI, id string) *OrderedList {
-	return c.Page().GetControl(id).(*OrderedList)
+	ol, _ := c.Form().GetControl(id).(*OrderedList)
+	return ol
 }
 
 func init() {
-	page.RegisterControl(&OrderedList{})
+	page.RegisterControl(func() page.ControlI { return new(OrderedList) })
 }

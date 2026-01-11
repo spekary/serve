@@ -3,10 +3,10 @@ package textbox
 import (
 	"context"
 	"encoding/gob"
-	"fmt"
 	"strconv"
 
 	"github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/serve/i18n"
 
 	"github.com/goradd/serve/page"
 )
@@ -34,7 +34,7 @@ func NewIntegerTextbox(parent page.ControlI, id string) *IntegerTextbox {
 	return t
 }
 
-func (t *IntegerTextbox) Init(self any, parent page.ControlI, id string) {
+func (t *IntegerTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Textbox.Init(self, parent, id)
 	t.ValidateWith(IntValidator{})
 	t.SetAttribute("inputmode", "numeric") // set inputmode for mobile input, but do it here so programmer could cancel this if desired.
@@ -132,7 +132,9 @@ func (v MinIntValidator) Validate(c page.ControlI, s string) (msg string) {
 	}
 	if val, _ := strconv.Atoi(s); val < v.MinValue {
 		if v.Message == "" {
-			return fmt.Sprintf(c.GT("Enter at least %d"), v.MinValue)
+			return c.T("Enter at least %d",
+				v.MinValue,
+				i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -151,7 +153,9 @@ func (v MaxIntValidator) Validate(c page.ControlI, s string) (msg string) {
 	}
 	if val, _ := strconv.Atoi(s); val > v.MaxValue {
 		if v.Message == "" {
-			return fmt.Sprintf(c.GT("Enter at most %d"), v.MaxValue)
+			return c.T("Enter at most %d",
+				v.MaxValue,
+				i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -183,7 +187,7 @@ type IntegerTextboxCreator struct {
 	// ColumnCount is the number of characters wide the textbox will be, and becomes the width attribute in the tag.
 	// The actual width is browser dependent. For better control, use a width style property.
 	ColumnCount int
-	// RowCount creates a multi-line textarea with the given number of rows. By default the
+	// RowCount creates a multi-line textarea with the given number of rows. By default, the
 	// textbox will expand vertically by this number of lines. Use a height style property for
 	// better control of the height of a textbox.
 	RowCount int
@@ -201,7 +205,7 @@ type IntegerTextboxCreator struct {
 	// than this amount, or enters something that is not an integer, it will fail validation
 	// and the FormFieldWrapper will show an error.
 	MaxValue *IntegerLimit
-	// Value is the initial value of the textbox. Often its best to load the value in a separate Load step after creating the control.
+	// Value is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
 	Value interface{}
 
 	page.ControlOptions
@@ -243,12 +247,13 @@ func (c IntegerTextboxCreator) Init(ctx context.Context, ctrl IntegerI) {
 
 // GetIntegerTextbox is a convenience method to return the control with the given id from the page.
 func GetIntegerTextbox(c page.ControlI, id string) *IntegerTextbox {
-	return c.Page().GetControl(id).(*IntegerTextbox)
+	it, _ := c.Form().GetControl(id).(*IntegerTextbox)
+	return it
 }
 
 func init() {
 	gob.Register(MaxIntValidator{})
 	gob.Register(MinIntValidator{})
 	gob.Register(IntValidator{})
-	page.RegisterControl(&IntegerTextbox{})
+	page.RegisterControl(func() page.ControlI { return new(IntegerTextbox) })
 }

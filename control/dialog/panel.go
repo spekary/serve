@@ -55,29 +55,30 @@ type DialogPanel struct {
 // or it returns the dialog panel with the given id that already exists. isNew will indicate whether it
 // created a new dialog, or is returning an existing one.
 func GetDialogPanel(parent page.ControlI, id string) (dialogPanel *DialogPanel, isNew bool) {
-	if parent.Page().HasControl(id) { // dialog has already been created, but is hidden
-		return parent.Page().GetControl(id).(*DialogPanel), false
+	if c := parent.Form().GetControl(id); c != nil { // dialog has already been created, but is hidden
+		return c.(*DialogPanel), false
 	}
 
-	dlg := NewDialogI(parent.ParentForm(), id+"-dlg")
+	dlg := NewDialogI(parent.Form(), id+"-dlg")
 	dialogPanel = new(DialogPanel)
 	dialogPanel.Init(dialogPanel, dlg, id)
 	return dialogPanel, true
 }
 
 // Init is called by the framework to initialize the
-func (p *DialogPanel) Init(self any, parent page.ControlI, id string) {
+func (p *DialogPanel) Init(self page.ControlI, parent page.ControlI, id string) {
 	p.Panel.Init(self, parent, id)
 	p.AddClass("gr-dlg-pnl") // Give the ability to provide a consistent style across the app to all panels in a dialog
 }
 
 func (p *DialogPanel) getDialog() DialogI {
-	return p.Page().GetControl(p.ID() + "-dlg").(DialogI)
+	d, _ := p.Form().GetControl(p.ID() + "-dlg").(DialogI)
+	return d
 }
 
 // OnClose attaches an action that will happen when the dialog closes.
 func (p *DialogPanel) OnClose(a action.ActionI) {
-	p.getDialog().On(event.DialogClosed().Validate(event.ValidateNone), a)
+	p.getDialog().On(event.DialogClosed().Validate(event.ValidateNone).Action(a))
 }
 
 // OnButton attaches an action handler that responds to button presses. The id of the pressed button will
@@ -147,11 +148,11 @@ func (p *DialogPanel) RemoveButton(id string) {
 	p.getDialog().RemoveButton(id)
 }
 
-// RemoveAllButtons removes all the buttons from the dialog
-func (p *DialogPanel) RemoveAllButtons() {
-	p.getDialog().RemoveAllButtons()
+// RemoveAllButtonBarControls removes all the controls from the button bar.
+func (p *DialogPanel) RemoveAllButtonBarControls() {
+	p.getDialog().RemoveAllButtonBarControls()
 }
 
 func init() {
-	page.RegisterControl(&DialogPanel{})
+	page.RegisterControl(func() page.ControlI { return new(DialogPanel) })
 }

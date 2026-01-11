@@ -7,6 +7,7 @@ import (
 	"time"
 
 	time2 "github.com/goradd/goradd/pkg/time"
+	"github.com/goradd/serve/i18n"
 
 	"github.com/goradd/serve/page"
 )
@@ -36,7 +37,7 @@ func NewDateTextbox(parent page.ControlI, id string) *DateTextbox {
 }
 
 // Init initializes the control.
-func (d *DateTextbox) Init(self any, parent page.ControlI, id string) {
+func (d *DateTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	d.Textbox.Init(self, parent, id)
 	d.ValidateWith(DateValidator{})
 	d.formats = []string{time2.UsDateTime}
@@ -72,15 +73,10 @@ func (d *DateTextbox) layouts() []string {
 // parseDate will parse the given string using the layouts in the textbox until it finds one that does not
 // result in an error, or until it exhausts all the layouts. The resulting date will be the first second of that
 // day in the timezone of the browser.
-func (d *DateTextbox) parseDate(ctx context.Context, s string) (result time.Time, layoutUsed string, err error) {
-	var grctx *page.Context
-
-	if ctx != nil {
-		grctx = page.GetContext(ctx)
-	}
+func (d *DateTextbox) parseDate(request *page.RequestContext, s string) (result time.Time, layoutUsed string, err error) {
 	for _, layoutUsed = range d.layouts() {
-		if grctx != nil && time2.LayoutHasDate(layoutUsed) && time2.LayoutHasTime(layoutUsed) {
-			result, err = time2.ParseInOffset(layoutUsed, s, grctx.ClientTimezone(), grctx.ClientTimezoneOffset())
+		if request != nil && time2.LayoutHasDate(layoutUsed) && time2.LayoutHasTime(layoutUsed) {
+			result, err = time2.ParseInOffset(layoutUsed, s, request.ClientTimezone(), request.ClientTimezoneOffset())
 		} else {
 			result, err = time2.ParseForgiving(layoutUsed, s)
 		}
@@ -128,14 +124,14 @@ func (d *DateTextbox) Date() time.Time {
 	return d.time
 }
 
-func (d *DateTextbox) UpdateFormValues(ctx context.Context) {
-	d.Textbox.UpdateFormValues(ctx)
+func (d *DateTextbox) UpdateFormValues(request *page.RequestContext) {
+	d.Textbox.UpdateFormValues(request)
 
 	if d.readonly {
 		// This would happen if someone was attempting to hack the browser.
 		return
 	}
-	if _, ok := page.GetContext(ctx).FormValue(d.ID()); !ok {
+	if _, ok := request.FormValue(d.ID()); !ok {
 		return
 	}
 	t := d.Text()
@@ -144,7 +140,7 @@ func (d *DateTextbox) UpdateFormValues(ctx context.Context) {
 		return
 	}
 
-	v, layout, err := d.parseDate(ctx, t)
+	v, layout, err := d.parseDate(request, t)
 
 	if err == nil {
 		d.Textbox.SetText(v.Format(layout))
@@ -192,7 +188,9 @@ func (v DateValidator) Validate(c page.ControlI, s string) (msg string) {
 	ctrl := c.(DateI)
 	if ctrl.Date().IsZero() {
 		if v.Message == "" {
-			return c.GT("Enter one of these formats: ") + strings.Join(ctrl.Formats(), ", ")
+			return c.T("Enter one of these formats: %s",
+				strings.Join(ctrl.Formats(), ", "),
+				i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -224,9 +222,10 @@ type DateTextboxCreator struct {
 	// It is particularly helpful when the textbox is being used to filter the results of a query, so that
 	// when the user comes back to the page, he does not have to type the filter text again.
 	SaveState bool
-	// Text is the initial value of the textbox. Often its best to load the value in a separate Load step after creating the control.
+	// Text is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
 	Text string
-	// Formats is the time.format strings to use to decode the text into a date or to display the date. By default it is datetime.UsDateTime.
+	// Formats is the time.format strings to use to decode the text into a date or to display the date.
+	// By default, it is datetime.UsDateTime.
 	Formats []string
 
 	page.ControlOptions
@@ -261,10 +260,12 @@ func (c DateTextboxCreator) Init(ctx context.Context, ctrl DateI) {
 
 // GetDateTextbox is a convenience method to return the control with the given id from the page.
 func GetDateTextbox(c page.ControlI, id string) *DateTextbox {
-	return c.Page().GetControl(id).(*DateTextbox)
+	dt, _ := c.Form().GetControl(id).(*DateTextbox)
+	return dt
 }
 
 func init() {
 	gob.Register(DateValidator{})
-	page.RegisterControl(&DateTextbox{})
+
+	page.RegisterControl(func() page.ControlI { return new(DateTextbox) })
 }

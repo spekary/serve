@@ -48,7 +48,7 @@ func NewUnorderedList(parent page.ControlI, id string) *UnorderedList {
 	return l
 }
 
-func (l *UnorderedList) Init(self any, parent page.ControlI, id string) {
+func (l *UnorderedList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.ControlBase.Init(self, parent, id)
 	l.List = NewList(l)
 	l.Tag = "ul"
@@ -180,7 +180,7 @@ func (c UnorderedListCreator) Init(ctx context.Context, ctrl UnorderedListI) {
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 	if c.BulletStyle != "" {
@@ -191,9 +191,11 @@ func (c UnorderedListCreator) Init(ctx context.Context, ctrl UnorderedListI) {
 
 // GetUnorderedList is a convenience method to return the control with the given id from the page.
 func GetUnorderedList(c page.ControlI, id string) *UnorderedList {
-	return c.Page().GetControl(id).(*UnorderedList)
+	ul, _ := c.Form().GetControl(id).(*UnorderedList)
+	return ul
+
 }
 
 func init() {
-	page.RegisterControl(&UnorderedList{})
+	page.RegisterControl(func() page.ControlI { return new(UnorderedList) })
 }

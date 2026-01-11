@@ -87,6 +87,11 @@ func (s *DateTimeSpan) DrawingAttributes(ctx context.Context) html5tag.Attribute
 	return a
 }
 
+func GetDateTimeSpan(c page.ControlI, id string) *DateTimeSpan {
+	d, _ := c.Form().GetControl(id).(*DateTimeSpan)
+	return d
+}
+
 func (s *DateTimeSpan) Serialize(e page.Encoder) {
 	s.ControlBase.Serialize(e)
 

@@ -52,7 +52,7 @@ func NewCheckboxList(parent page.ControlI, id string) *CheckboxList {
 }
 
 // Init is called by subclasses
-func (l *CheckboxList) Init(self any, parent page.ControlI, id string) {
+func (l *CheckboxList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.MultiselectList.Init(self, parent, id)
 	l.Tag = "div"
 	l.rowClass = "gr-cbl-row"
@@ -162,18 +162,17 @@ func (l *CheckboxList) RenderItem(item *Item) (h string) {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (l *CheckboxList) UpdateFormValues(ctx context.Context) {
+func (l *CheckboxList) UpdateFormValues(request *page.RequestContext) {
 	controlID := l.ID()
-	grctx := page.GetContext(ctx)
 
-	if grctx.RequestMode() == page.Server {
+	if request.RequestMode() == page.RequestModeServer {
 		// Using name attribute to return rendered checkboxes that are turned on.
-		v, _ := grctx.FormValues(controlID)
+		v, _ := request.FormValues(controlID)
 		l.SetSelectedValuesNoRefresh(v)
 	} else {
 		// Individual checkbox ids are recorded in the form values
 		for _, item := range l.Items() {
-			if v, ok := grctx.FormValue(item.ID()); ok {
+			if v, ok := request.FormValue(item.ID()); ok {
 				l.SetSelectedValueNoRefresh(item.Value(), v == "true")
 			}
 		}
@@ -258,7 +257,7 @@ func (c CheckboxListCreator) Init(ctx context.Context, ctrl CheckboxListI) {
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 	if c.ColumnCount != 0 {
@@ -282,9 +281,10 @@ func (c CheckboxListCreator) Init(ctx context.Context, ctrl CheckboxListI) {
 
 // GetCheckboxList is a convenience method to return the control with the given id from the page.
 func GetCheckboxList(c page.ControlI, id string) *CheckboxList {
-	return c.Page().GetControl(id).(*CheckboxList)
+	cb, _ := c.Form().GetControl(id).(*CheckboxList)
+	return cb
 }
 
 func init() {
-	page.RegisterControl(&CheckboxList{})
+	page.RegisterControl(func() page.ControlI { return new(CheckboxList) })
 }

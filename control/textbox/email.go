@@ -2,9 +2,9 @@ package textbox
 
 import (
 	"context"
-	"fmt"
 	"net/mail"
 
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
 )
 
@@ -31,7 +31,7 @@ func NewEmailTextbox(parent page.ControlI, id string) *EmailTextbox {
 	return t
 }
 
-func (t *EmailTextbox) Init(self any, parent page.ControlI, id string) {
+func (t *EmailTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Textbox.Init(self, parent, id)
 	t.maxItemCount = 1
 	t.SetType(EmailType)
@@ -57,13 +57,18 @@ func (t *EmailTextbox) Validate(ctx context.Context) bool {
 
 	if ret {
 		if t.parseErr != "" {
-			t.SetValidationError(t.GT("Not a valid email address: " + t.parseErr))
+			t.SetValidationError(t.T("Not a valid email address: %s",
+				t.parseErr,
+				i18n.Domain(i18n.FrameworkDomain)))
 			return false
 		} else if len(t.items) > t.maxItemCount {
 			if t.maxItemCount == 1 {
-				t.SetValidationError(t.GT("Enter only one email address"))
+				t.SetValidationError(t.T("Enter only one email address",
+					i18n.Domain(i18n.FrameworkDomain)))
 			} else {
-				t.SetValidationError(fmt.Sprintf(t.GT("Enter at most %d email addresses separated by commas"), t.maxItemCount))
+				t.SetValidationError(t.T("Enter at most %d email addresses separated by commas",
+					t.maxItemCount,
+					i18n.Domain(i18n.FrameworkDomain)))
 			}
 
 			return false
@@ -73,8 +78,8 @@ func (t *EmailTextbox) Validate(ctx context.Context) bool {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (t *EmailTextbox) UpdateFormValues(ctx context.Context) {
-	t.Textbox.UpdateFormValues(ctx)
+func (t *EmailTextbox) UpdateFormValues(request *page.RequestContext) {
+	t.Textbox.UpdateFormValues(request)
 	if t.Text() == "" {
 		t.items = nil
 		t.parseErr = ""
@@ -150,7 +155,7 @@ type EmailTextboxCreator struct {
 	// It is particularly helpful when the textbox is being used to filter the results of a query, so that
 	// when the user comes back to the page, he does not have to type the filter text again.
 	SaveState bool
-	// Text is the initial value of the textbox. Often its best to load the value in a separate Load step after creating the control.
+	// Text is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
 	Text string
 	// MaxItemCount is the maximum number of email addresses allowed to be entered, separated by commas
 	// By default it allows only 1.
@@ -186,9 +191,10 @@ func (c EmailTextboxCreator) Init(ctx context.Context, ctrl EmailI) {
 
 // GetEmailTextbox is a convenience method to return the control with the given id from the page.
 func GetEmailTextbox(c page.ControlI, id string) *EmailTextbox {
-	return c.Page().GetControl(id).(*EmailTextbox)
+	tb, _ := c.Form().GetControl(id).(*EmailTextbox)
+	return tb
 }
 
 func init() {
-	page.RegisterControl(&EmailTextbox{})
+	page.RegisterControl(func() page.ControlI { return new(EmailTextbox) })
 }

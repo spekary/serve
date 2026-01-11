@@ -3,10 +3,10 @@ package textbox
 import (
 	"context"
 	"encoding/gob"
-	"fmt"
 	"strconv"
 
 	"github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/serve/i18n"
 
 	"github.com/goradd/serve/page"
 )
@@ -36,7 +36,7 @@ func NewFloatTextbox(parent page.ControlI, id string) *FloatTextbox {
 }
 
 // Init is called by the framework, and subclasses of the FloatTextbox.
-func (t *FloatTextbox) Init(self any, parent page.ControlI, id string) {
+func (t *FloatTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Textbox.Init(self, parent, id)
 	t.ValidateWith(FloatValidator{})
 	t.SetAttribute("inputmode", "decimal") // set inputmode for mobile input, but do it here so programmer could cancel this if desired.
@@ -95,11 +95,11 @@ type FloatValidator struct {
 
 func (v FloatValidator) Validate(c page.ControlI, s string) (msg string) {
 	if s == "" {
-		return "" // empty textbox is checked elsewhere
+		return // empty textbox is checked elsewhere
 	}
 	if !strings.IsFloat(s) {
-		if msg == "" {
-			return c.GT("Please enter a number.")
+		if v.Message == "" {
+			return c.T("Please enter a number.", i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -117,8 +117,8 @@ func (v MinFloatValidator) Validate(c page.ControlI, s string) (msg string) {
 		return "" // empty textbox is checked elsewhere
 	}
 	if val, _ := strconv.ParseFloat(s, 64); val < v.MinValue {
-		if msg == "" {
-			return fmt.Sprintf(c.GT("Enter at least %f"), v.MinValue)
+		if v.Message == "" {
+			return c.T("Enter at least %f", v.MinValue, i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -136,8 +136,9 @@ func (v MaxFloatValidator) Validate(c page.ControlI, s string) (msg string) {
 		return "" // empty textbox is checked elsewhere
 	}
 	if val, _ := strconv.ParseFloat(s, 64); val > v.MaxValue {
-		if msg == "" {
-			return fmt.Sprintf(c.GT("Enter at most %f"), v.MaxValue)
+		if v.Message == "" {
+			return c.T("Enter at most %f", v.MaxValue,
+				i18n.Domain(i18n.FrameworkDomain))
 		} else {
 			return v.Message
 		}
@@ -169,7 +170,7 @@ type FloatTextboxCreator struct {
 	// ColumnCount is the number of characters wide the textbox will be, and becomes the width attribute in the tag.
 	// The actual width is browser dependent. For better control, use a width style property.
 	ColumnCount int
-	// RowCount creates a multi-line textarea with the given number of rows. By default the
+	// RowCount creates a multi-line textarea with the given number of rows. By default, the
 	// textbox will expand vertically by this number of lines. Use a height style property for
 	// better control of the height of a textbox.
 	RowCount int
@@ -187,7 +188,7 @@ type FloatTextboxCreator struct {
 	// than this amount, or enters something that is not an integer, it will fail validation
 	// and the FormFieldWrapper will show an error.
 	MaxValue *FloatLimit
-	// Value is the initial value of the textbox. Often its best to load the value in a separate Load step after creating the control.
+	// Value is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
 	Value interface{}
 
 	page.ControlOptions
@@ -229,12 +230,13 @@ func (c FloatTextboxCreator) Init(ctx context.Context, ctrl FloatI) {
 
 // GetFloatTextbox is a convenience method to return the control with the given id from the page.
 func GetFloatTextbox(c page.ControlI, id string) *FloatTextbox {
-	return c.Page().GetControl(id).(*FloatTextbox)
+	ft, _ := c.Form().GetControl(id).(*FloatTextbox)
+	return ft
 }
 
 func init() {
 	gob.Register(MaxFloatValidator{})
 	gob.Register(MinFloatValidator{})
 	gob.Register(FloatValidator{})
-	page.RegisterControl(&FloatTextbox{})
+	page.RegisterControl(func() page.ControlI { return new(FloatTextbox) })
 }

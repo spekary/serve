@@ -54,8 +54,10 @@ func (c CanvasCreator) Create(ctx context.Context, parent page.ControlI) page.Co
 }
 
 // GetCanvas is a convenience method to return the canvas with the given id from the page.
+// Returns nil if the control does not exist, or is not a Canvas.
 func GetCanvas(c page.ControlI, id string) *Canvas {
-	return c.Form().GetControl(id).(*Canvas)
+	cvs, _ := c.Form().GetControl(id).(*Canvas)
+	return cvs
 }
 
 func init() {

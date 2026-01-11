@@ -575,7 +575,8 @@ func (d *DataPager) Deserialize(dec page.Decoder) {
 }
 
 func GetDataPager(c page.ControlI, id string) DataPagerI {
-	return c.Form().GetControl(id).(DataPagerI)
+	dp, _ := c.Form().GetControl(id).(DataPagerI)
+	return dp
 }
 
 // DataPagerCreator is the initialization structure for declarative creation of data pagers

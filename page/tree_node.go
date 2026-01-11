@@ -17,8 +17,10 @@ type treeNoder interface {
 	Form() FormI
 	HasChildControls() bool
 	FindChildControl(id string) ControlI
-
 	ChildControlIDs() []string
+	RemoveChildControlById(id string)
+	RemoveAllChildControls()
+
 	parentID() string
 	addChild(treeNoder)
 	removeChild(treeNoder)
@@ -135,9 +137,20 @@ func (t *treeNode) addChild(child treeNoder) {
 }
 
 func (t *treeNode) removeChild(child treeNoder) {
-	t.childIds = slices.DeleteFunc(t.childIds, func(s string) bool {
-		return s == child.ID()
-	})
+	t.RemoveChildControlById(child.ID())
+}
+
+func (t *treeNode) RemoveChildControlById(id string) {
+	for i, cid := range t.childIds {
+		if cid == id {
+			t.childIds = slices.Delete(t.childIds, i, i+1)
+			return
+		}
+	}
+}
+
+func (t *treeNode) RemoveAllChildControls() {
+	t.childIds = nil
 }
 
 // ChildControls returns an iterator that yields every immediate child control.

@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/action"
 )
@@ -52,7 +53,7 @@ import (
 func Alert(parent page.ControlI, title string, message string, hasClose bool, buttons ...string) *DialogPanel {
 	dialogPanel, _ := GetDialogPanel(parent, "gr-alert")
 	dialogPanel.SetText(message)
-	dialogPanel.RemoveAllButtons()
+	dialogPanel.RemoveAllButtonBarControls()
 	dialogPanel.SetHasCloseBox(hasClose)
 	dialogPanel.SetTitle(title)
 
@@ -94,7 +95,9 @@ func Alert(parent page.ControlI, title string, message string, hasClose bool, bu
 //	      }
 //	  }
 func YesNo(parent page.ControlI, title string, message string, resultAction action.ActionI) *DialogPanel {
-	p := Alert(parent, title, message, false, parent.GT("Yes"), parent.GT("No"))
+	p := Alert(parent, title, message, false,
+		parent.T("Yes", i18n.Domain(i18n.FrameworkDomain)),
+		parent.T("No", i18n.Domain(i18n.FrameworkDomain)))
 	p.OnButton(resultAction)
 	return p
 }

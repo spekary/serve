@@ -24,7 +24,7 @@ func NewPagedTable(parent page.ControlI, id string) *PagedTable {
 	return t
 }
 
-func (t *PagedTable) Init(self any, parent page.ControlI, id string) {
+func (t *PagedTable) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Table.Init(self, parent, id)
 	t.PagedControl.SetPageSize(0) // use the application default
 }
@@ -137,9 +137,10 @@ func (c PagedTableCreator) Init(ctx context.Context, ctrl PagedTableI) {
 
 // GetPagedTable is a convenience method to return the table with the given id from the page.
 func GetPagedTable(c page.ControlI, id string) *PagedTable {
-	return c.Page().GetControl(id).(*PagedTable)
+	pt, _ := c.Form().GetControl(id).(*PagedTable)
+	return pt
 }
 
 func init() {
-	page.RegisterControl(&PagedTable{})
+	page.RegisterControl(func() page.ControlI { return new(PagedTable) })
 }

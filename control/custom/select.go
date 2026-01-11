@@ -1,4 +1,4 @@
-package table
+package custom
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/goradd/maps"
 	"github.com/goradd/serve/control"
 	"github.com/goradd/serve/control/list"
+	"github.com/goradd/serve/control/table"
 	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
@@ -21,7 +22,7 @@ type PrimaryKeyer interface {
 }
 
 type SelectTableI interface {
-	TableI
+	table.TableI
 	SetSelectedID(id string) SelectTableI
 	SetReselectable(r bool) SelectTableI
 }
@@ -29,7 +30,7 @@ type SelectTableI interface {
 // SelectTable is a table that is row selectable.
 // To detect a row selection, using the [RowSelectedEvent] event.
 type SelectTable struct {
-	Table
+	table.Table
 	selectedID   string
 	reselectable bool
 }
@@ -46,10 +47,10 @@ func NewSelectTable(parent page.ControlI, id string) *SelectTable {
 	return t
 }
 
-func (t *SelectTable) Init(self any, parent page.ControlI, id string) {
+func (t *SelectTable) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Table.Init(self, parent, id)
-	t.ParentForm().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "/js/goradd-scrollIntoView.js"), false, nil)
-	t.ParentForm().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "/js/table-select.js"), false, nil)
+	t.Form().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "/js/goradd-scrollIntoView.js"), false, nil)
+	t.Form().AddJavaScriptFile(path.Join(config.AssetPrefix, "goradd", "/js/table-select.js"), false, nil)
 	t.SetAttribute("tabindex", 0) // Make the entire table focusable and selectable. This can be overridden later if needed.
 	t.AddClass("gr-clickable-rows")
 }
@@ -112,8 +113,8 @@ func (t *SelectTable) DrawingAttributes(ctx context.Context) html5tag.Attributes
 }
 
 // UpdateFormValues is called by the framework to get its selected row from incoming form values.
-func (t *SelectTable) UpdateFormValues(ctx context.Context) {
-	if data := page.GetContext(ctx).CustomControlValue(t.ID(), "selectedId"); data != nil {
+func (t *SelectTable) UpdateFormValues(request *page.RequestContext) {
+	if data := request.CustomControlValue(t.ID(), "selectedId"); data != nil {
 		t.selectedID = fmt.Sprint(data)
 	}
 }
@@ -187,19 +188,19 @@ type SelectTableCreator struct {
 	// FooterRowCount is the number of footer rows.
 	FooterRowCount int
 	// RowStyler returns the attributes to be used in a cell.
-	RowStyler RowAttributer
+	RowStyler table.RowAttributer
 	// RowStylerID is a control id for the control that will be the RowStyler of the table.
 	RowStylerID string
 	// HeaderRowStyler returns the attributes to be used in a header cell.
-	HeaderRowStyler HeaderRowAttributer
+	HeaderRowStyler table.HeaderRowAttributer
 	// HeaderRowStylerID is a control id for the control that will be the HeaderRowStyler of the table.
 	HeaderRowStylerID string
 	// FooterRowStyler returns the attributes to be used in a footer cell. It can be either a control id or a FooterRowAttributer.
-	FooterRowStyler FooterRowAttributer
+	FooterRowStyler table.FooterRowAttributer
 	// FooterRowStylerID is a control id for the control that will be the FooterRowStyler of the table.
 	FooterRowStylerID string
 	// Columns are the column creators that will add columns to the table
-	Columns []ColumnCreator
+	Columns []table.ColumnCreator
 	// DataProvider is the control that will dynamically provide the data for the list and that implements the DataBinder interface.
 	DataProvider control.DataBinder
 	// DataProviderID is the id of a control that will dynamically provide the data for the list and that implements the DataBinder interface.
@@ -231,7 +232,7 @@ func (c SelectTableCreator) Create(ctx context.Context, parent page.ControlI) pa
 
 // Init is called by implementations of Buttons to initialize a control with the creator.
 func (c SelectTableCreator) Init(ctx context.Context, ctrl SelectTableI) {
-	sub := TableCreator{
+	sub := table.TableCreator{
 		ID:               c.ID,
 		Caption:          c.Caption,
 		HideIfEmpty:      c.HideIfEmpty,

@@ -46,7 +46,7 @@ func NewButton(parent page.ControlI, id string) *Button {
 }
 
 // Init is called by subclasses of Button to initialize the button control structure.
-func (b *Button) Init(self any, parent page.ControlI, id string) {
+func (b *Button) Init(self page.ControlI, parent page.ControlI, id string) {
 	b.ControlBase.Init(self, parent, id)
 	b.Tag = "button"
 	b.SetAttribute("type", "button")
@@ -76,9 +76,9 @@ func (b *Button) SetIsPrimary(s bool) ButtonI {
 }
 
 // On causes the given actions to execute when the given event is triggered.
-func (b *Button) On(e *event.Event, action ...action.ActionI) page.ControlI {
+func (b *Button) On(e *event.Event) page.ControlI {
 	e.Terminating() // prevent default action (override submit)
-	b.ControlBase.On(e, action...)
+	b.ControlBase.On(e)
 	return b.this()
 }
 
@@ -86,7 +86,7 @@ func (b *Button) On(e *event.Event, action ...action.ActionI) page.ControlI {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (b *Button) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := b.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "button")
+	a.SetData(page.ControlTypeDataAttribute, "button")
 
 	a.Set("name", page.HtmlVarAction) // needed for non-javascript posts
 	a.Set("value", b.ID())
@@ -103,8 +103,9 @@ func (b *Button) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 // operations that will redirect to a different page. If coupling this with an ajax response, you should
 // probably also make the response priority PriorityFinal.
 func (b *Button) OnSubmit(action action.ActionI) ButtonI {
+	e := event.Click().Delay(200).Blocking().Action(action)
 	// We delay here to try to make sure any other delayed events are executed first.
-	b.this().On(event.Click().Delay(200).Blocking(), action)
+	b.this().On(e)
 	return b.this()
 }
 
@@ -114,7 +115,7 @@ func (b *Button) OnSubmit(action action.ActionI) ButtonI {
 //
 // Passing a nil action will invoke DoAction with a default action.
 func (b *Button) OnClick(action action.ActionI) ButtonI {
-	b.this().On(event.Click(), action)
+	b.this().On(event.Click().Action(action))
 	return b.this()
 }
 
@@ -168,9 +169,10 @@ func (c ButtonCreator) Init(ctx context.Context, ctrl ButtonI) {
 
 // GetButton is a convenience method to return the button with the given id from the page.
 func GetButton(c page.ControlI, id string) *Button {
-	return c.Page().GetControl(id).(*Button)
+	b, _ := c.Form().GetControl(id).(*Button)
+	return b
 }
 
 func init() {
-	page.RegisterControl(&Button{})
+	page.RegisterControl(func() page.ControlI { return new(Button) })
 }

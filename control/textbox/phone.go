@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	strings2 "github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
 )
 
@@ -25,7 +26,7 @@ func NewPhoneTextbox(parent page.ControlI, id string) *PhoneTextbox {
 	return t
 }
 
-func (t *PhoneTextbox) Init(self any, parent page.ControlI, id string) {
+func (t *PhoneTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.Textbox.Init(self, parent, id)
 	t.SetType(TelType)
 }
@@ -52,7 +53,7 @@ func (t *PhoneTextbox) Validate(ctx context.Context) bool {
 				t.SetText("(" + n[0:3] + ") " + n[3:6] + "-" + n[6:])
 				return true
 			} else {
-				t.SetValidationError(t.GT("Invalid phone number"))
+				t.SetValidationError(t.T("Invalid phone number", i18n.Domain(i18n.FrameworkDomain)))
 				return false
 			}
 		}
@@ -60,7 +61,7 @@ func (t *PhoneTextbox) Validate(ctx context.Context) bool {
 	return ret
 }
 
-// PhoneTextboxCreator creates an phone textbox.
+// PhoneTextboxCreator creates a phone textbox.
 // Pass it to AddControls of a control, or as a Child of
 // a FormFieldWrapper.
 type PhoneTextboxCreator struct {
@@ -85,7 +86,7 @@ type PhoneTextboxCreator struct {
 	// It is particularly helpful when the textbox is being used to filter the results of a query, so that
 	// when the user comes back to the page, he does not have to type the filter text again.
 	SaveState bool
-	// Text is the initial value of the textbox. Often its best to load the value in a separate Load step after creating the control.
+	// Text is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
 	Text string
 
 	page.ControlOptions
@@ -115,9 +116,10 @@ func (c PhoneTextboxCreator) Init(ctx context.Context, ctrl PhoneI) {
 
 // GetPhoneTextbox is a convenience method to return the control with the given id from the page.
 func GetPhoneTextbox(c page.ControlI, id string) *PhoneTextbox {
-	return c.Page().GetControl(id).(*PhoneTextbox)
+	pt, _ := c.Form().GetControl(id).(*PhoneTextbox)
+	return pt
 }
 
 func init() {
-	page.RegisterControl(&PhoneTextbox{})
+	page.RegisterControl(func() page.ControlI { return new(PhoneTextbox) })
 }

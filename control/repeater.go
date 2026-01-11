@@ -202,7 +202,8 @@ func (c RepeaterCreator) Init(ctx context.Context, ctrl RepeaterI) {
 
 // GetRepeater is a convenience method to return the repeater with the given id from the page.
 func GetRepeater(c page.ControlI, id string) *Repeater {
-	return c.Form().GetControl(id).(*Repeater)
+	r, _ := c.Form().GetControl(id).(*Repeater)
+	return r
 }
 
 func init() {

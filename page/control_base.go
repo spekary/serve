@@ -140,14 +140,20 @@ type ControlI interface {
 	MergeAttributes(a html5tag.Attributes) ControlI
 	SetDisplay(d string) ControlI
 
+	// Values
+
+	IsRequired() bool
+	SetIsRequired(bool) ControlI
 	UpdateFormValues(request *RequestContext)
 	SetDisabled(d bool)
 	IsDisabled() bool
-
 	SetTextIsHtml(bool) ControlI
 	TextIsLabel() bool
 	Text() string
 	SetText(t string) ControlI
+	T(message string, params ...interface{}) string
+
+	// Actions and Events
 
 	SetActionValue(v any) ControlI
 	ActionValue() any
@@ -156,6 +162,10 @@ type ControlI interface {
 	AddRenderScript(f string, params ...any)
 	AddRelatedRenderScript(id string, f string, params ...any)
 	WrapEvent(eventName string, selector string, eventJs string, options map[string]interface{}) string
+	On(e *event.Event) ControlI
+	Off(ids ...event.EventID)
+
+	// Validation
 
 	Validate(ctx context.Context) bool
 	ValidationState() ValidationState
@@ -166,9 +176,13 @@ type ControlI interface {
 	ValidationMessage() string
 	SetValidationError(e string)
 
+	// Serialization
+
 	Serialize(e Encoder)
 	Deserialize(d Decoder)
 	Deserialized()
+
+	// State management
 
 	// SaveState tells the control whether to save the basic state of the control, so that when the form is reentered, the
 	// data in the control will remain the same. This is particularly useful if the control is used as a filter for the
@@ -316,6 +330,16 @@ type ControlBase struct {
 func (c *ControlBase) Init(self ControlI, parent ControlI, id string) {
 	c.Base.Init(self)
 	var form FormI
+
+	if parent == nil {
+		if f, ok := self.(FormI); !ok {
+			panic("you must specify a parent control")
+		} else {
+			form = f
+		}
+	} else {
+		form = parent.Form()
+	}
 	if parent != nil {
 		form = parent.Form()
 	}
@@ -369,6 +393,19 @@ func (c *ControlBase) SetHeightStyle(h interface{}) ControlI {
 	c.attributes.SetStyle("height", v)
 	c.AddRenderScript("css", "height", v) // use javascript to set this value
 	return c.this()
+}
+
+// SetIsRequired will set whether the control requires a value from the user. Setting it to true
+// will cause the ControlBase to check this during validation, and show an appropriate error message if the user
+// did not enter a value.
+func (c *ControlBase) SetIsRequired(r bool) ControlI {
+	c.isRequired = r
+	return c.this()
+}
+
+// IsRequired returns true if the control requires a value to be set in order to pass validation.
+func (c *ControlBase) IsRequired() bool {
+	return c.isRequired
 }
 
 // SetTextIsHtml to true to turn off html escaping of the text output.
@@ -885,8 +922,8 @@ func (c *ControlBase) DoAction(ctx context.Context, a action.Params) {
 func (c *ControlBase) DoPrivateAction(ctx context.Context, a action.Params) {
 }
 
-// Specifying an action is deprecated. Instead, call Action on the event.
-func (c *ControlBase) On(e *event.Event, a ...action.ActionI) ControlI {
+// On adds an event listener to the control that will trigger the actions attached to the event.
+func (c *ControlBase) On(e *event.Event) ControlI {
 	c.Refresh() // completely redraw the control. The act of redrawing will turn off old scripts.
 	// TODO: Adding scripts should instead just redraw the associated script block. We will need to
 	// implement a script block with every control connected by id
@@ -907,12 +944,6 @@ func (c *ControlBase) On(e *event.Event, a ...action.ActionI) ControlI {
 	c.events[c.eventCounter] = e
 
 	event.SetEventID(e, c.eventCounter)
-
-	if len(a) > 1 {
-		e.Action(action.Group(a...))
-	} else if len(a) == 1 {
-		e.Action(a[0])
-	}
 
 	return c.this()
 }

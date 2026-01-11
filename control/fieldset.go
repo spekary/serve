@@ -88,7 +88,8 @@ func (c FieldsetCreator) Create(ctx context.Context, parent page.ControlI) page.
 
 // GetFieldset is a convenience method to return the panel with the given id from the page.
 func GetFieldset(c page.ControlI, id string) *Fieldset {
-	return c.Form().GetControl(id).(*Fieldset)
+	fs, _ := c.Form().GetControl(id).(*Fieldset)
+	return fs
 }
 
 func init() {

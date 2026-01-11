@@ -61,7 +61,8 @@ func (c SpanCreator) Create(ctx context.Context, parent page.ControlI) page.Cont
 
 // GetSpan is a convenience method to return the button with the given id from the page.
 func GetSpan(c page.ControlI, id string) *Span {
-	return c.Form().GetControl(id).(*Span)
+	s, _ := c.Form().GetControl(id).(*Span)
+	return s
 }
 
 func init() {

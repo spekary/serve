@@ -68,7 +68,7 @@ type ColumnI interface {
 	HeaderAttributes(ctx context.Context, row int, col int) html5tag.Attributes
 	FooterAttributes(ctx context.Context, row int, col int) html5tag.Attributes
 	ColTagAttributes() html5tag.Attributes
-	UpdateFormValues(ctx context.Context)
+	UpdateFormValues(request *page.RequestContext)
 	AddActions(ctrl page.ControlI)
 	DoAction(ctx context.Context, params action.Params)
 	SetCellTexter(s CellTexter) ColumnI
@@ -420,7 +420,7 @@ func (c *ColumnBase) CellText(ctx context.Context, row int, col int, data interf
 	}
 	d := c.this().CellData(ctx, row, col, data)
 	if t, ok := d.(time.Time); c.showLocalTime && ok {
-		d = time2.AtGMTOffset(t, page.GetContext(ctx).ClientTimezoneOffset())
+		d = time2.AtGMTOffset(t, page.GetRequest(ctx).ClientTimezoneOffset())
 	}
 	return c.ApplyFormat(d)
 }
@@ -459,7 +459,7 @@ func (c *ColumnBase) IsSortable() bool {
 // UpdateFormValues is called by the system whenever values are sent by client controls.
 // This default version does nothing. Columns that need to record information (checkbox columns for example), should
 // implement this.
-func (c *ColumnBase) UpdateFormValues(ctx context.Context) {}
+func (c *ColumnBase) UpdateFormValues(request *page.RequestContext) {}
 
 func (c *ColumnBase) AddActions(ctrl page.ControlI) {}
 
@@ -615,16 +615,16 @@ func (c *ColumnBase) Deserialize(dec page.Decoder) {
 
 func (c *ColumnBase) Restore(parentTable TableI) {
 	if c.cellTexterID != "" {
-		c.cellTexter = parentTable.Page().GetControl(c.cellTexterID).(CellTexter)
+		c.cellTexter = parentTable.Form().GetControl(c.cellTexterID).(CellTexter)
 	}
 	if c.headerTexterID != "" {
-		c.headerTexter = parentTable.Page().GetControl(c.headerTexterID).(CellTexter)
+		c.headerTexter = parentTable.Form().GetControl(c.headerTexterID).(CellTexter)
 	}
 	if c.footerTexterID != "" {
-		c.footerTexter = parentTable.Page().GetControl(c.footerTexterID).(CellTexter)
+		c.footerTexter = parentTable.Form().GetControl(c.footerTexterID).(CellTexter)
 	}
 	if c.cellStylerID != "" {
-		c.cellStyler = parentTable.Page().GetControl(c.cellStylerID).(CellStyler)
+		c.cellStyler = parentTable.Form().GetControl(c.cellStylerID).(CellStyler)
 	}
 
 	return
@@ -707,14 +707,14 @@ func (c *ColumnBase) ApplyOptions(ctx context.Context, parent TableI, opt Column
 	}
 	if opt.HeaderTexter != nil {
 		if s, ok := opt.HeaderTexter.(string); ok {
-			c.SetHeaderTexter(parent.Page().GetControl(s).(CellTexter))
+			c.SetHeaderTexter(parent.Form().GetControl(s).(CellTexter))
 		} else {
 			c.SetHeaderTexter(opt.HeaderTexter.(CellTexter))
 		}
 	}
 	if opt.FooterTexter != nil {
 		if s, ok := opt.FooterTexter.(string); ok {
-			c.SetFooterTexter(parent.Page().GetControl(s).(CellTexter))
+			c.SetFooterTexter(parent.Form().GetControl(s).(CellTexter))
 		} else {
 			c.SetFooterTexter(opt.FooterTexter.(CellTexter))
 		}

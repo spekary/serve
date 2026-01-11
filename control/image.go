@@ -199,7 +199,8 @@ func (c ImageCreator) Init(ctx context.Context, ctrl ImageI) {
 
 // GetImage is a convenience method to return the button with the given id from the page.
 func GetImage(c page.ControlI, id string) *Image {
-	return c.Form().GetControl(id).(*Image)
+	i, _ := c.Form().GetControl(id).(*Image)
+	return i
 }
 
 func init() {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/goradd/html5tag"
 	control2 "github.com/goradd/serve/control"
+	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
@@ -42,7 +43,7 @@ func NewSelectList(parent page.ControlI, id string) *SelectList {
 }
 
 // Init is called by subclasses.
-func (l *SelectList) Init(self any, parent page.ControlI, id string) {
+func (l *SelectList) Init(self page.ControlI, parent page.ControlI, id string) {
 	l.ControlBase.Init(self, parent, id)
 	l.List = NewList(l.this())
 	l.Tag = "select"
@@ -62,7 +63,7 @@ func (l *SelectList) Validate(ctx context.Context) bool {
 	sel := l.SelectedItem()
 	if l.IsRequired() && (sel == nil || sel.IsEmptyValue()) {
 		if l.ErrorForRequired == "" {
-			l.SetValidationError(l.GT("A selection is required"))
+			l.SetValidationError(l.T("A selection is required", i18n.Domain(i18n.FrameworkDomain)))
 		} else {
 			l.SetValidationError(l.ErrorForRequired)
 		}
@@ -72,10 +73,10 @@ func (l *SelectList) Validate(ctx context.Context) bool {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (l *SelectList) UpdateFormValues(ctx context.Context) {
+func (l *SelectList) UpdateFormValues(request *page.RequestContext) {
 	id := l.ID()
 
-	if v, ok := page.GetContext(ctx).FormValue(id); ok {
+	if v, ok := request.FormValue(id); ok {
 		l.selectedValue = v
 	}
 }
@@ -296,7 +297,7 @@ func (c SelectListCreator) Init(ctx context.Context, ctrl SelectListI) {
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 
@@ -317,13 +318,15 @@ func (c SelectListCreator) Init(ctx context.Context, ctrl SelectListI) {
 
 // GetSelectList is a convenience method to return the control with the given id from the page.
 func GetSelectList(c page.ControlI, id string) *SelectList {
-	return c.Page().GetControl(id).(*SelectList)
+	sl, _ := c.Form().GetControl(id).(*SelectList)
+	return sl
 }
 
 func GetSelectListI(c page.ControlI, id string) SelectListI {
-	return c.Page().GetControl(id).(SelectListI)
+	sl, _ := c.Form().GetControl(id).(SelectListI)
+	return sl
 }
 
 func init() {
-	page.RegisterControl(&SelectList{})
+	page.RegisterControl(func() page.ControlI { return new(SelectList) })
 }

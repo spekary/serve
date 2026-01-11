@@ -10,11 +10,11 @@ import (
 
 func Test_controlCache_AllControls(t *testing.T) {
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, form, "c2")
-	_ = newTestControl(form, c1, "")
-	_ = newTestControl(form, c2, "")
-	_ = newTestControl(form, c2, "")
+	c1 := newTestControl(form, "c1")
+	c2 := newTestControl(form, "c2")
+	_ = newTestControl(c1, "")
+	_ = newTestControl(c2, "")
+	_ = newTestControl(c2, "")
 
 	var count int
 	for c := range form.Page().AllControls() {
@@ -50,11 +50,11 @@ func Test_controlCache_AllControls(t *testing.T) {
 
 func Test_controlCache_serialize(t *testing.T) {
 	form := newTestForm()
-	c1 := newTestControl(form, form, "c1")
-	c2 := newTestControl(form, form, "c2")
-	_ = newTestControl(form, c1, "")
-	_ = newTestControl(form, c2, "")
-	_ = newTestControl(form, c2, "")
+	c1 := newTestControl(form, "c1")
+	c2 := newTestControl(form, "c2")
+	_ = newTestControl(c1, "")
+	_ = newTestControl(c2, "")
+	_ = newTestControl(c2, "")
 
 	var buf bytes.Buffer
 	e := gob.NewEncoder(&buf)
@@ -72,11 +72,11 @@ func Test_controlCache_serialize(t *testing.T) {
 func Test_controlCache_setGeneratedIdPrefix(t *testing.T) {
 	form := newTestForm()
 	form.SetGeneratedIdPrefix("b")
-	c1 := newTestControl(form, form, "")
-	c2 := newTestControl(form, form, "")
-	_ = newTestControl(form, c1, "")
-	_ = newTestControl(form, c2, "")
-	c5 := newTestControl(form, c2, "")
+	c1 := newTestControl(form, "")
+	c2 := newTestControl(form, "")
+	_ = newTestControl(c1, "")
+	_ = newTestControl(c2, "")
+	c5 := newTestControl(c2, "")
 
 	assert.Equal(t, "b5", c5.ID())
 }

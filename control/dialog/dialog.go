@@ -55,7 +55,7 @@ type DialogI interface {
 	SetButtonStyle(id string, a html5tag.Style)
 	MergeButtonAttributes(id string, a html5tag.Attributes)
 	RemoveButton(id string)
-	RemoveAllButtons()
+	RemoveAllButtonBarControls()
 }
 
 // Dialog is the default implementation of a dialog in GoRADD. You should not normally call this directly, but
@@ -78,7 +78,7 @@ func NewDialog(parent page.ControlI, id string) *Dialog {
 }
 
 // Init is called by subclasses of the dialog.
-func (d *Dialog) Init(self any, parent page.ControlI, id string) {
+func (d *Dialog) Init(self page.ControlI, parent page.ControlI, id string) {
 	// Our strategy here is to create a dialog overlay that is a container for the currently shown dialogs. This
 	// container is owned by the form itself, even if sub-controls create the dialog.
 	var overlay *control.Panel
@@ -87,8 +87,8 @@ func (d *Dialog) Init(self any, parent page.ControlI, id string) {
 		panic("Dialogs must have an id.")
 	}
 
-	if !parent.Page().HasControl(OverlayID) {
-		overlay = control.NewPanel(parent.ParentForm(), OverlayID)
+	if parent.Form().GetControl(OverlayID) == nil {
+		overlay = control.NewPanel(parent.Form(), OverlayID)
 		overlay.SetShouldAutoRender(true)
 	} else {
 		overlay = control.GetPanel(parent, OverlayID)
@@ -198,7 +198,7 @@ func (d *Dialog) AddButton(
 			}
 		}
 	} else {
-		btn.On(event.Click(), action.Trigger(d.ID(), event.DialogButtonEvent, id))
+		btn.On(event.Click().Action(action.Trigger(d.ID(), event.DialogButtonEvent, id)))
 	}
 
 	d.Refresh()
@@ -206,15 +206,15 @@ func (d *Dialog) AddButton(
 
 // RemoveButton removes the given button from the dialog
 func (d *Dialog) RemoveButton(id string) {
-	d.ButtonBar().RemoveChild(id)
+	d.ButtonBar().RemoveChildControlById(id)
 	d.Refresh()
 	//delete(d.validators, id)
 }
 
-// RemoveAllButtons removes all the buttons from the dialog
-func (d *Dialog) RemoveAllButtons() {
+// RemoveAllButtonBarControls removes all the controls from the button bar
+func (d *Dialog) RemoveAllButtonBarControls() {
 	bb := d.ButtonBar()
-	bb.RemoveChildren()
+	bb.RemoveAllChildControls()
 	bb.Refresh()
 	//delete(d.validators, id)
 }
@@ -223,7 +223,7 @@ func (d *Dialog) RemoveAllButtons() {
 // styled so that they are not shown.
 func (d *Dialog) SetButtonVisible(id string, visible bool) {
 	bb := d.ButtonBar()
-	if ctrl := bb.Child(id); ctrl != nil {
+	if ctrl := bb.FindChildControl(id); ctrl != nil {
 		ctrl.SetVisible(visible)
 	}
 }
@@ -231,7 +231,7 @@ func (d *Dialog) SetButtonVisible(id string, visible bool) {
 // SetButtonText sets the text of a button that was previously created
 func (d *Dialog) SetButtonText(id string, text string) {
 	bb := d.ButtonBar()
-	if ctrl := bb.Child(id); ctrl != nil {
+	if ctrl := bb.FindChildControl(id); ctrl != nil {
 		ctrl.SetText(text)
 	}
 }
@@ -239,7 +239,7 @@ func (d *Dialog) SetButtonText(id string, text string) {
 // SetButtonStyle sets css styles on a button that is already in the dialog
 func (d *Dialog) SetButtonStyle(id string, a html5tag.Style) {
 	bb := d.ButtonBar()
-	if ctrl := bb.Child(id); ctrl != nil {
+	if ctrl := bb.FindChildControl(id); ctrl != nil {
 		ctrl.SetStyles(a)
 	}
 }
@@ -247,7 +247,7 @@ func (d *Dialog) SetButtonStyle(id string, a html5tag.Style) {
 // MergeButtonAttributes merges the given attributes into the button's attributes.
 func (d *Dialog) MergeButtonAttributes(id string, a html5tag.Attributes) {
 	bb := d.ButtonBar()
-	if ctrl := bb.Child(id); ctrl != nil {
+	if ctrl := bb.FindChildControl(id); ctrl != nil {
 		ctrl.MergeAttributes(a)
 	}
 }
@@ -259,7 +259,7 @@ func (d *Dialog) SetHasCloseBox(h bool) {
 	if h && cb == nil {
 		d.addCloseBox()
 	} else if !h && cb != nil {
-		cb.Remove()
+		cb.Detach()
 		d.closeBoxID = ""
 	}
 }
@@ -270,7 +270,7 @@ func (d *Dialog) addCloseBox() {
 	cb.AddClass("gr-dialog-close")
 	cb.SetText(`<span">X</span>`)
 	cb.SetTextIsHtml(true)
-	cb.On(event.Click(), action.Trigger(d.ID(), event.DialogClosedEvent, nil))
+	cb.On(event.Click().Action(action.Trigger(d.ID(), event.DialogClosedEvent, nil)))
 }
 
 // AddCloseButton adds a button to the list of buttons with the given label, but this button will trigger the DialogCloseEvent
@@ -303,7 +303,7 @@ func (d *Dialog) Hide() {
 	d.SetVisible(false)
 	overlay := control.GetPanel(d, OverlayID)
 	var vis bool
-	for _, child := range overlay.Children() {
+	for child := range overlay.ChildControls() {
 		if child.IsVisible() {
 			vis = true
 			break
@@ -388,16 +388,16 @@ func RestoreNewDialogFunction() {
 // GetDialog returns the DialogI object corresponding to the given id. The id should be either the id of the
 // dialog object, or the DialogPanel inside the dialog object.
 func GetDialog(parent page.ControlI, id string) DialogI {
-	c := parent.Page().GetControl(id)
+	c := parent.Form().GetControl(id)
 
 	if dlg, ok := c.(DialogI); ok {
 		return dlg
 	} else if dlg, ok := c.(*DialogPanel); ok {
-		return dlg.Parent().(DialogI)
+		return dlg.ParentControl().(DialogI)
 	}
 	return nil
 }
 
 func init() {
-	page.RegisterControl(&Dialog{})
+	page.RegisterControl(func() page.ControlI { return new(Dialog) })
 }

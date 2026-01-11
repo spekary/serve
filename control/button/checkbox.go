@@ -27,7 +27,7 @@ func NewCheckbox(parent page.ControlI, id string) *Checkbox {
 // You do not normally need to call this function.
 func (c *Checkbox) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.CheckboxBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "checkbox")
+	a.SetData(page.ControlTypeDataAttribute, "checkbox")
 	a.Set("name", c.ID()) // needed for posts
 	a.Set("type", "checkbox")
 	a.Set("value", "1") // required for html validity
@@ -36,8 +36,8 @@ func (c *Checkbox) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 
 // UpdateFormValues is an internal call that lets us reflect the value of the checkbox on the form.
 // You do not normally need to call this function.
-func (c *Checkbox) UpdateFormValues(ctx context.Context) {
-	c.UpdateCheckboxFormValues(ctx)
+func (c *Checkbox) UpdateFormValues(request *page.RequestContext) {
+	c.UpdateCheckboxFormValues(request)
 }
 
 type CheckboxCreator struct {
@@ -79,16 +79,17 @@ func (c CheckboxCreator) Create(ctx context.Context, parent page.ControlI) page.
 	}
 
 	if c.OnChange != nil {
-		ctrl.On(event.Change(), c.OnChange)
+		ctrl.On(event.Change().Action(c.OnChange))
 	}
 	return ctrl
 }
 
 // GetCheckbox is a convenience method to return the checkbox with the given id from the page.
 func GetCheckbox(c page.ControlI, id string) *Checkbox {
-	return c.Page().GetControl(id).(*Checkbox)
+	cb, _ := c.Form().GetControl(id).(*Checkbox)
+	return cb
 }
 
 func init() {
-	page.RegisterControl(&Checkbox{})
+	page.RegisterControl(func() page.ControlI { return new(Checkbox) })
 }

@@ -27,6 +27,8 @@ const (
 	SortClick
 )
 
+const logModule = "table"
+
 // TableI is the table interface that lets you create a "subclass" of the Table object.
 // The functions defined here are hooks that you can implement in your subclass.
 type TableI interface {
@@ -143,7 +145,7 @@ func NewTable(parent page.ControlI, id string) *Table {
 // Init is an internal function that enables the object-oriented pattern of calling virtual functions used by the
 // GoRADD controls. You would only call this if you were implementing a "subclass" of the Table. Call it immediately after
 // creating your Table structure, passing the newly created table as "self".
-func (t *Table) Init(self any, parent page.ControlI, id string) {
+func (t *Table) Init(self page.ControlI, parent page.ControlI, id string) {
 	t.ControlBase.Init(self, parent, id)
 	t.Tag = "table"
 	t.columns = []ColumnI{}
@@ -213,9 +215,9 @@ func (t *Table) FooterRowCount() int {
 // DrawTag is called by the framework to draw the table. The Table overrides this to call into the DataProvider
 // to load the table's data into memory just before drawing. The data will be unloaded after drawing.
 func (t *Table) DrawTag(ctx context.Context, w io.Writer) {
-	log.FrameworkDebug("Drawing table tag")
+	log.Debug(ctx, logModule, "Drawing table tag")
 	if t.HasDataProvider() {
-		log.FrameworkDebug("Getting table data")
+		log.Debug(ctx, logModule, "Getting table data")
 		t.this().LoadData(ctx, t.this())
 		defer t.ResetData()
 	}
@@ -526,9 +528,9 @@ func (t *Table) SetFooterRowStyler(a FooterRowAttributer) TableI {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (t *Table) UpdateFormValues(ctx context.Context) {
+func (t *Table) UpdateFormValues(request *page.RequestContext) {
 	for _, col := range t.columns {
-		col.UpdateFormValues(ctx)
+		col.UpdateFormValues(request)
 	}
 }
 
@@ -554,7 +556,7 @@ func (t *Table) DoPrivateAction(ctx context.Context, p action.Params) {
 		t.sortClick(p.EventValueString())
 		t.Refresh()
 	default:
-		if par := t.Parent(); par != nil {
+		if par := t.ParentControl(); par != nil {
 			par.DoPrivateAction(ctx, p)
 		}
 	}
@@ -844,19 +846,19 @@ func (t *Table) Deserialize(dec page.Decoder) {
 	}
 }
 
-func (t *Table) Restore() {
-	t.ControlBase.Restore()
+func (t *Table) Deserialized() {
+	t.ControlBase.Deserialized()
 	if t.captionId != "" {
-		t.caption = t.Page().GetControl(t.captionId)
+		t.caption = t.Form().GetControl(t.captionId)
 	}
 	if t.rowStylerId != "" {
-		t.rowStyler = t.Page().GetControl(t.rowStylerId).(RowAttributer)
+		t.rowStyler = t.Form().GetControl(t.rowStylerId).(RowAttributer)
 	}
 	if t.headerRowStylerId != "" {
-		t.headerRowStyler = t.Page().GetControl(t.headerRowStylerId).(HeaderRowAttributer)
+		t.headerRowStyler = t.Form().GetControl(t.headerRowStylerId).(HeaderRowAttributer)
 	}
 	if t.footerRowStylerId != "" {
-		t.footerRowStyler = t.Page().GetControl(t.footerRowStylerId).(FooterRowAttributer)
+		t.footerRowStyler = t.Form().GetControl(t.footerRowStylerId).(FooterRowAttributer)
 	}
 
 	for _, col := range t.columns {
@@ -943,25 +945,25 @@ func (c TableCreator) Init(ctx context.Context, ctrl TableI) {
 	if c.RowStyler != nil {
 		ctrl.SetRowStyler(c.RowStyler)
 	} else if c.RowStylerID != "" {
-		ctrl.SetRowStyler(ctrl.Page().GetControl(c.RowStylerID).(RowAttributer))
+		ctrl.SetRowStyler(ctrl.Form().GetControl(c.RowStylerID).(RowAttributer))
 	}
 
 	if c.HeaderRowStyler != nil {
 		ctrl.SetHeaderRowStyler(c.HeaderRowStyler)
 	} else if c.HeaderRowStylerID != "" {
-		ctrl.SetHeaderRowStyler(ctrl.Page().GetControl(c.HeaderRowStylerID).(HeaderRowAttributer))
+		ctrl.SetHeaderRowStyler(ctrl.Form().GetControl(c.HeaderRowStylerID).(HeaderRowAttributer))
 	}
 
 	if c.FooterRowStyler != nil {
 		ctrl.SetFooterRowStyler(c.FooterRowStyler)
 	} else if c.FooterRowStylerID != "" {
-		ctrl.SetFooterRowStyler(ctrl.Page().GetControl(c.FooterRowStylerID).(FooterRowAttributer))
+		ctrl.SetFooterRowStyler(ctrl.Form().GetControl(c.FooterRowStylerID).(FooterRowAttributer))
 	}
 
 	if c.DataProvider != nil {
 		ctrl.SetDataProvider(c.DataProvider)
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Page().GetControl(c.DataProviderID).(control2.DataBinder)
+		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
 		ctrl.SetDataProvider(provider)
 	}
 
@@ -988,7 +990,7 @@ func (c TableCreator) Init(ctx context.Context, ctrl TableI) {
 	}
 
 	if c.OnCellClick != nil {
-		ctrl.On(event.CellClick(), c.OnCellClick)
+		ctrl.On(event.CellClick().Action(c.OnCellClick))
 	}
 
 	ctrl.ApplyOptions(ctx, c.ControlOptions)
@@ -996,11 +998,12 @@ func (c TableCreator) Init(ctx context.Context, ctrl TableI) {
 
 // GetTable is a convenience method to return the table with the given id from the page.
 func GetTable(c page.ControlI, id string) *Table {
-	return c.Page().GetControl(id).(*Table)
+	t, _ := c.Form().GetControl(id).(*Table)
+	return t
 }
 
 func init() {
-	page.RegisterControl(&Table{})
+	page.RegisterControl(func() page.ControlI { return new(Table) })
 }
 
 // Similar to the control registry, since columns rely on the "this" variable to deserialize, we

@@ -27,7 +27,7 @@ type CheckboxBase struct {
 }
 
 // Init initializes a checkbox base class. It is called by checkbox implementations.
-func (c *CheckboxBase) Init(self any, parent page.ControlI, id string) {
+func (c *CheckboxBase) Init(self page.ControlI, parent page.ControlI, id string) {
 	c.ControlBase.Init(self, parent, id)
 
 	c.Tag = "input"
@@ -228,34 +228,30 @@ func (c *CheckboxBase) Deserialize(d page.Decoder) {
 
 // UpdateCheckboxFormValues is used by subclasses of CheckboxBase to update their internal state
 // if they are a checkbox type of control.
-func (c *CheckboxBase) UpdateCheckboxFormValues(ctx context.Context) {
+func (c *CheckboxBase) UpdateCheckboxFormValues(request *page.RequestContext) {
 	id := c.ID()
-	grctx := page.GetContext(ctx)
-
-	if v, ok := grctx.FormValue(id); ok {
+	if v, ok := request.FormValue(id); ok {
 		c.SetCheckedNoRefresh(v)
-	} else if grctx.RequestMode() == page.Server && c.IsOnPage() {
+	} else if request.RequestMode() == page.RequestModeServer && c.IsOnPage() {
 		// We will not get a value if an item is not checked. But since this is a POST, all values on page
-		// should send something if its checked, therefore we know its not checked.
+		// should send something if it is checked, therefore we know its not checked.
 		c.SetCheckedNoRefresh(false)
 	}
 }
 
 // UpdateRadioFormValues is used by subclasses of CheckboxBase to update their internal state
 // if they are a radioButton type of control.
-func (c *CheckboxBase) UpdateRadioFormValues(ctx context.Context, group string) {
+func (c *CheckboxBase) UpdateRadioFormValues(request *page.RequestContext, group string) {
 	id := c.ID()
-	grctx := page.GetContext(ctx)
-
 	if group != "" {
-		if v, ok := grctx.FormValue(group); ok {
+		if v, ok := request.FormValue(group); ok {
 			c.SetCheckedNoRefresh(v == c.ID())
 		}
 	} else {
 		// a radio button without a group makes little sense. This is here in case this is the basis for some javascript control.
-		if v, ok := grctx.FormValue(id); ok {
+		if v, ok := request.FormValue(id); ok {
 			c.SetCheckedNoRefresh(v)
-		} else if grctx.RequestMode() == page.Server && c.IsOnPage() {
+		} else if request.RequestMode() == page.RequestModeServer && c.IsOnPage() {
 			c.SetCheckedNoRefresh(false)
 		}
 	}
