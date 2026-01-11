@@ -9,6 +9,7 @@ type Mock struct {
 }
 
 func NewMock() *Mock {
+
 	return new(Mock)
 }
 

@@ -434,9 +434,12 @@ func (c *ControlBase) SetText(t string) ControlI {
 	return c.this()
 }
 
+// Attributes returns a pointer to the attributes of the control. Use this with caution.
+// Some controls setup attributes at initialization time, so you could potentially write over those.
+// Also, if you change attributes during an ajax call, the changes will not be reflected unless you redraw
+// the control. The primary use for this function is to allow controls to set up attributes during initialization.
 func (c *ControlBase) Attributes() html5tag.Attributes {
-	//TODO implement me
-	panic("implement me")
+	return c.attributes
 }
 
 // DrawPreRender prepares the control for drawing.

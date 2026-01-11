@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 
@@ -405,4 +406,14 @@ func OutputLen(ctx context.Context) int {
 
 func ResetOutputBuffer(ctx context.Context) []byte {
 	return http2.ResetOutputBuffer(ctx)
+}
+
+// NewMockContext creates a context for testing.
+func NewMockContext() (ctx context.Context) {
+	sm := session.NewMock()
+	ctx = sm.With(context.Background())
+
+	r := httptest.NewRequestWithContext(ctx, "", "/", nil)
+	ctx, _ = parseRequest(r)
+	return ctx
 }

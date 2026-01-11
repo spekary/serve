@@ -507,3 +507,21 @@ func init() {
 	gob.Register(&FormBase{})
 	gob.Register(new(headerItem))
 }
+
+type MockForm struct {
+	FormBase
+}
+
+func NewMockForm() *MockForm {
+	f := new(MockForm)
+	f.setPage(new(Page))
+	f.Init("MockFormID")
+	return f
+}
+
+func (f *MockForm) Init(id string) {
+	f.FormBase.Init(f, id)
+}
+
+func (f *MockForm) AddRelatedFiles() {
+}

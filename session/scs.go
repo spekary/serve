@@ -20,6 +20,9 @@ type ScsManager struct {
 }
 
 func NewScsManager(mgr *scs.SessionManager) ManagerI {
+	if mgr == nil {
+		mgr = scs.New()
+	}
 	return ScsManager{mgr}
 }
 

@@ -117,8 +117,8 @@ func (a *ServerBase) SetupSessionManager() {
 	if config.ProxyPath != "" {
 		s.Cookie.Path = config.ProxyPath
 	}
+	s.IdleTimeout = 6 * time.Hour
 	sm := session.NewScsManager(s)
-	sm.(session.ScsManager).SessionManager.IdleTimeout = 6 * time.Hour
 	a.SessionHandler = sm
 }
 
