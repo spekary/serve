@@ -123,13 +123,16 @@ func (a *ServerBase) SetupSessionManager() {
 }
 
 // SetupMessenger injects the global messenger that permits pub/sub communication between the server and client.
-//
-// You can use this mechanism to set up your own messaging system for application use too.
 func (a *ServerBase) SetupMessenger() {
 	// The default sets up a websocket based messenger appropriate for development and single-server applications
-	m := new(ws.WsMessenger)
-	messenger.Messenger = m
-	m.Start()
+	if config.WebsocketMessengerPath != "" {
+		m := new(ws.WsMessenger)
+		messenger.Messenger = m
+		m.Start()
+
+		http2.RegisterStaticHandler(config.WebsocketMessengerPath, messenger.Messenger.(*ws.WsMessenger).WebSocketHandler())
+	}
+
 }
 
 // WithPageHandler processes requests for data driven pages.

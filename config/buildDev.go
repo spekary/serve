@@ -2,11 +2,6 @@
 
 package config
 
-import (
-	"github.com/goradd/goradd/pkg/sys"
-	"path/filepath"
-)
-
 // The Release constant is used throughout the framework to determine if we are running the development version
 // or release version of the product. The development version is designed to make on-going development easier,
 // and the release version is designed to run on a deployment server.
@@ -15,6 +10,7 @@ import (
 // You might build a release version that keeps the debug features on if you are building for manual testers
 const Release = false
 
+/*
 // These directories are available during development, but not for the release build. If you have static files you
 // need to locate, you will need to provide a different mechanism to do that. See the main package for how the
 // framework does that for assets, by using a pattern in the URL, combined with a flag past in to the application at
@@ -39,3 +35,4 @@ func init() {
 	filename := sys.SourceDirectory()
 	goraddDir = filepath.Dir(filepath.Dir(filename))
 }
+*/

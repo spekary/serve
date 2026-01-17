@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/goradd/goradd/pkg/goradd"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +20,7 @@ func Test_BufferedOutput(t *testing.T) {
 		assert.EqualValues(t, "HeyYou", b.String(), "Output was not buffered")
 		assert.Equal(t, 6, OutputLen(r.Context()), "Len was not recorded")
 	}
-	h := BufferedOutputManager().Use(http.HandlerFunc(fn))
+	h := WithBufferedOutput(http.HandlerFunc(fn))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -42,7 +41,7 @@ func Test_UnbufferedOutput(t *testing.T) {
 		assert.NotEqualValues(t, "HeyYou", b.String(), "Output was buffered but should not be")
 		assert.Equal(t, 6, OutputLen(r.Context()), "Len was not recorded")
 	}
-	h := BufferedOutputManager().Use(http.HandlerFunc(fn))
+	h := WithBufferedOutput(http.HandlerFunc(fn))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -63,7 +62,7 @@ func Test_BufferedOutputCode(t *testing.T) {
 		assert.EqualValues(t, "Hey", b.String(), "Output was not buffered")
 		assert.Equal(t, 3, OutputLen(r.Context()), "Len was not recorded")
 	}
-	h := BufferedOutputManager().Use(http.HandlerFunc(fn))
+	h := WithBufferedOutput(http.HandlerFunc(fn))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -86,7 +85,7 @@ func Test_UnbufferedOutputCode(t *testing.T) {
 		assert.NotEqualValues(t, "Hey", b.String(), "Output was not buffered")
 		assert.Equal(t, 3, OutputLen(r.Context()), "Len was not recorded")
 	}
-	h := BufferedOutputManager().Use(http.HandlerFunc(fn))
+	h := WithBufferedOutput(http.HandlerFunc(fn))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -109,7 +108,7 @@ func Test_BufferedOutputReset(t *testing.T) {
 		assert.EqualValues(t, "HeyYou", b, "Output was not buffered")
 		assert.Equal(t, 0, OutputLen(r.Context()), "Buffer was not reset")
 	}
-	h := BufferedOutputManager().Use(http.HandlerFunc(fn))
+	h := WithBufferedOutput(http.HandlerFunc(fn))
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -122,5 +121,5 @@ func Test_BufferedOutputReset(t *testing.T) {
 }
 
 func outputBuffer(ctx context.Context) *bytes.Buffer {
-	return ctx.Value(goradd.BufferContext).(BufferedResponseWriterI).OutputBuffer()
+	return ctx.Value(bufferedOutputContext{}).(BufferedResponseWriterI).OutputBuffer()
 }

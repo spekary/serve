@@ -12,8 +12,8 @@ import (
 	"net/http/httputil"
 	"time"
 
-	"github.com/goradd/goradd/pkg/messageServer"
 	"github.com/goradd/serve/log"
+	"github.com/goradd/serve/messenger"
 	"github.com/gorilla/websocket"
 )
 
@@ -167,7 +167,7 @@ func (c *Client) handleMessage(data []byte) {
 		}
 	}
 	if msg.Channel != "" {
-		messageServer.Send(msg.Channel, msg.Message)
+		messenger.Send(msg.Channel, msg.Message)
 	}
 
 }

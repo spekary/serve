@@ -29,7 +29,7 @@ func Error(ctx context.Context, module string, msg string, args ...any) {
 	if logger != nil {
 		l = logger
 	} else {
-		l = logger.WithGroup("serve")
+		l = slog.Default().WithGroup("serve")
 	}
 	if ctx != nil {
 		ctx = context.Background()
@@ -50,7 +50,7 @@ func Warn(ctx context.Context, module string, msg string, args ...any) {
 	if logger != nil {
 		l = logger
 	} else {
-		l = logger.WithGroup("serve")
+		l = slog.Default().WithGroup("serve")
 	}
 	if ctx != nil {
 		ctx = context.Background()

@@ -3,7 +3,7 @@ package config
 import (
 	"html"
 
-	"github.com/goradd/goradd/pkg/strings"
+	"github.com/goradd/strings"
 	"github.com/microcosm-cc/bluemonday"
 )
 

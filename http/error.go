@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -236,7 +237,7 @@ func WithErrorHandler(h http.Handler) http.Handler {
 				case error:
 					err = v
 				case string:
-					err = fmt.Errorf(v)
+					err = errors.New(v)
 				default:
 					err = fmt.Errorf("%v", v)
 				}

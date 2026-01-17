@@ -9,14 +9,15 @@ package assets
 
 import (
 	"embed"
-	"github.com/goradd/goradd/pkg/config"
-	"github.com/goradd/goradd/pkg/http"
 	"path"
+
+	"github.com/goradd/serve/config"
+	"github.com/goradd/serve/http"
 )
 
 //go:embed js
 var a embed.FS
 
 func init() {
-	http.RegisterAssetDirectory(path.Join(config.AssetPrefix, "messenger"), a)
+	http.RegisterAssetDirectory(path.Join(config.AssetPath, "messenger"), a)
 }

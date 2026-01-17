@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
-	strings2 "github.com/goradd/goradd/pkg/strings"
 	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/log"
+	strings2 "github.com/goradd/strings"
 )
 
 // FileSystemServer serves a file system as an http.Handler.

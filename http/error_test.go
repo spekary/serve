@@ -37,8 +37,7 @@ func TestErrorReporter_Use(t *testing.T) {
 			fn := func(w http.ResponseWriter, r *http.Request) {
 				tt.f()
 			}
-			e := ErrorReporter{}
-			h := e.Use(http.HandlerFunc(fn))
+			h := WithErrorHandler(http.HandlerFunc(fn))
 			req := httptest.NewRequest("GET", "/", nil)
 			w := httptest.NewRecorder()
 

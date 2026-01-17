@@ -10,8 +10,8 @@ package assets
 
 import (
 	"embed"
-	"github.com/goradd/goradd/pkg/config"
-	"github.com/goradd/goradd/pkg/http"
+	"github.com/goradd/serve/config"
+	"github.com/goradd/serve/http"
 	"path"
 )
 
