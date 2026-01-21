@@ -1,7 +1,7 @@
 package event
 
 import (
-	"github.com/goradd/serve/event"
+	"github.com/goradd/serve/page/event"
 )
 
 // MessengerReady returns an event to indicate that the messenger is ready. Messenger implementations

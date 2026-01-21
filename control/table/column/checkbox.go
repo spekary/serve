@@ -139,12 +139,11 @@ func (c *CheckboxColumn) ResetChanges() {
 }
 
 // UpdateFormValues is used by the framework to cause the control to retrieve its values from the form
-func (c *CheckboxColumn) UpdateFormValues(ctx context.Context) {
-	grctx := page.GetContext(ctx)
-	if grctx.RequestMode() == page.Server {
+func (c *CheckboxColumn) UpdateFormValues(request *page.RequestContext) {
+	if request.RequestMode() == page.RequestModeServer {
 		// Using standard form submission rules. Only ON checkboxes get sent to us, so we have to figure out what got turned off
 		recent := make(map[string]bool)
-		if values, ok := grctx.FormValues(c.ParentTable().ID() + "_" + c.ID()); ok {
+		if values, ok := request.FormValues(c.ParentTable().ID() + "_" + c.ID()); ok {
 			for _, value := range values {
 				recent[value] = true
 			}
@@ -172,7 +171,7 @@ func (c *CheckboxColumn) UpdateFormValues(ctx context.Context) {
 	} else {
 		// We just get notified of the ids of checkboxes that changed since the last time we checked
 		for k, v := range c.current {
-			if v2, ok := grctx.FormValue(c.ParentTable().ID() + "_" + c.ID() + "_" + k); ok {
+			if v2, ok := request.FormValue(c.ParentTable().ID() + "_" + c.ID() + "_" + k); ok {
 				b2 := page.ConvertToBool(v2)
 				if v != b2 {
 					c.changes[k] = b2
@@ -223,15 +222,15 @@ func (c *CheckboxColumn) allClick(_ string, checked bool, _ int, _ int) {
 			}
 		}
 		// Fire javascript to check all visible
-		c.ParentTable().ParentForm().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]`, `prop`, page.PriorityStandard, `checked`, checked)
+		c.ParentTable().Form().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]`, `prop`, page.PriorityStandard, `checked`, checked)
 
 	} else {
 		// Fire javascript to check all visible and trigger a change
 		if checked {
-			c.ParentTable().ParentForm().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]:not(:checked)`, `click`, page.PriorityStandard)
+			c.ParentTable().Form().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]:not(:checked)`, `click`, page.PriorityStandard)
 
 		} else {
-			c.ParentTable().ParentForm().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]:checked`, `click`, page.PriorityStandard)
+			c.ParentTable().Form().Response().ExecuteSelectorFunction(`input[data-gr-checkcol]:checked`, `click`, page.PriorityStandard)
 		}
 	}
 
@@ -367,9 +366,6 @@ type CheckboxColumnCreator struct {
 	CheckboxProvider CheckboxProvider
 	// Title is the title of the column that appears in the header
 	Title string
-	// Sortable makes the column display sort arrows in the header
-	// Deprecated: Use SortDirection instead
-	Sortable bool
 	// SortDirection sets the initial sorting direction of the column, and will make the column sortable
 	// By default, the column is not sortable.
 	SortDirection table2.SortDirection
@@ -387,9 +383,6 @@ func (c CheckboxColumnCreator) Create(ctx context.Context, parent table2.TableI)
 	}
 	if c.Title != "" {
 		col.SetTitle(c.Title)
-	}
-	if c.Sortable {
-		col.SetSortable()
 	}
 	if c.SortDirection != table2.NotSortable {
 		col.SetSortDirection(c.SortDirection)

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goradd/goradd/pkg/config"
+	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/page"
 )
 

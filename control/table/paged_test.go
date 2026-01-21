@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	control2 "github.com/goradd/serve/control"
-	"github.com/goradd/serve/page/control"
+	"github.com/goradd/serve/page"
 
 	"github.com/goradd/html5tag"
 	"github.com/stretchr/testify/assert"
 )
 
 type pagedTableTestForm struct {
-	control.FormBase
+	page.MockForm
 }
 
-func (f *pagedTableTestForm) Init(ctx context.Context, id string) {
-	f.FormBase.Init(f, ctx, id)
+func (f *pagedTableTestForm) Init(self page.FormI, id string) {
+	f.MockForm.Init(self, id)
 }
 
 func (*pagedTableTestForm) RowAttributes(row int, data interface{}) html5tag.Attributes {
@@ -42,7 +42,7 @@ func TestPagedTable_Serialize(t *testing.T) {
 	enc := gob.NewEncoder(&buf)
 
 	f := new(pagedTableTestForm)
-	f.Init(context.Background(), "MockFormId")
+	f.Init(f, "MockFormId")
 
 	f.AddControls(context.Background(),
 		PagedTableCreator{

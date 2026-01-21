@@ -10,5 +10,5 @@ type CellTexter interface {
 }
 
 func GetCellTexter(ctrl page.ControlI, id string) CellTexter {
-	return ctrl.Page().GetControl(id).(CellTexter)
+	return ctrl.Form().GetControl(id).(CellTexter)
 }

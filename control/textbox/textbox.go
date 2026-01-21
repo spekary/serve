@@ -11,11 +11,11 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/goradd/goradd/pkg/strings"
 	"github.com/goradd/serve/i18n"
+	"github.com/goradd/strings"
 
-	"github.com/goradd/goradd/pkg/config"
 	"github.com/goradd/html5tag"
+	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/page"
 )
 

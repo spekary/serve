@@ -3,7 +3,7 @@ package column
 import (
 	"context"
 
-	"github.com/goradd/goradd/pkg/orm/query"
+	"github.com/goradd/gro/query"
 	table2 "github.com/goradd/serve/control/table"
 	"github.com/goradd/serve/page"
 )
@@ -34,7 +34,7 @@ func (c *AliasColumn) Init(alias string) {
 	c.alias = alias
 }
 
-func GetNode(c *AliasColumn) query.NodeI {
+func GetNode(c *AliasColumn) query.Node {
 	return query.Alias(c.alias)
 }
 

@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	strings2 "github.com/goradd/goradd/pkg/strings"
 	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/page"
+	strings2 "github.com/goradd/strings"
 )
 
 type PhoneI interface {

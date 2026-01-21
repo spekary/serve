@@ -73,7 +73,7 @@ type LanguageNames struct {
 
 // SupportedLanguageNames returns a slice of the supported languages, in both the language indicated and the native
 // representation of the name of that language.
-// You could use this to present a menu to the user. T
+// You could use this to present a menu to the user.
 func SupportedLanguageNames(t language.Tag) []LanguageNames {
 	s := make([]LanguageNames, len(languages))
 
@@ -104,21 +104,34 @@ func WithLanguage(ctx context.Context, acceptLanguageValue string) context.Conte
 	if acceptLanguageValue == "" {
 		return ctx
 	}
-	t, _, _ := MatchAcceptedLanguage(acceptLanguageValue)
-	return context.WithValue(ctx, langKey{}, t)
+	_, i, _ := MatchAcceptedLanguage(acceptLanguageValue)
+	return context.WithValue(ctx, langKey{}, i)
 }
 
-// LanguageFromContext returns the language.Tag value for the selected
+// LanguageFromIndex returns the language.Tag value for the index
+// returned by MatchAcceptedLanguage.
+//
+// If the index is out of bounds, then the default language and false will be returned.
+func LanguageFromIndex(i int) (language.Tag, bool) {
+	if i < 0 || i >= len(languages) {
+		return defaultLanguage(), false
+	}
+	return languages[i].Tag, true
+}
+
+// LanguageFromContext returns the language.Tag and index value for the selected
 // language that was injected using WithLanguage or LanguageHandler.
 //
 // If no language value is detected or there is an error, then the default
 // language and false will be returned.
-func LanguageFromContext(ctx context.Context) (language.Tag, bool) {
+func LanguageFromContext(ctx context.Context) (language.Tag, int, bool) {
 	contextVal := ctx.Value(langKey{})
-	if contextVal == nil {
-		return contextVal.(language.Tag), true
+	if i, ok := contextVal.(int); !ok {
+		return defaultLanguage(), 0, false
+	} else {
+		l, f := LanguageFromIndex(i)
+		return l, i, f
 	}
-	return defaultLanguage(), false
 }
 
 // LanguageHandler is middleware that detects the language of the request

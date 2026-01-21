@@ -5,9 +5,9 @@ import (
 	"html"
 	"io"
 
-	buf2 "github.com/goradd/goradd/pkg/pool"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/page"
+	buf2 "github.com/goradd/serve/pool"
 )
 
 type FieldsetI interface {

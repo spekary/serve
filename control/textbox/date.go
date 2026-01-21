@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	time2 "github.com/goradd/goradd/pkg/time"
 	"github.com/goradd/serve/i18n"
+	time2 "github.com/goradd/serve/time"
 
 	"github.com/goradd/serve/page"
 )
@@ -19,25 +19,25 @@ type DateI interface {
 	Formats() []string
 }
 
-// DateTextbox is a textbox that only permits dates and/or times to be entered into it.
+// TimeTextbox is a textbox that only permits dates and/or times to be entered into it.
 //
 // Dates and times will be converted to Browser local time.
-type DateTextbox struct {
+type TimeTextbox struct {
 	Textbox
 	formats []string  // Variety of formats it will accept. Same as what time.format expects.
 	time    time.Time // Converting from text to a datetime is expensive.
 	// We maintain a copy of the conversion to prevent duplication of effort.
 }
 
-// NewDateTextbox creates a new DateTextbox textbox.
-func NewDateTextbox(parent page.ControlI, id string) *DateTextbox {
-	d := &DateTextbox{}
+// NewTimeTextbox creates a new TimeTextbox textbox.
+func NewTimeTextbox(parent page.ControlI, id string) *TimeTextbox {
+	d := &TimeTextbox{}
 	d.Init(d, parent, id)
 	return d
 }
 
 // Init initializes the control.
-func (d *DateTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
+func (d *TimeTextbox) Init(self page.ControlI, parent page.ControlI, id string) {
 	d.Textbox.Init(self, parent, id)
 	d.ValidateWith(DateValidator{})
 	d.formats = []string{time2.UsDateTime}
@@ -45,18 +45,18 @@ func (d *DateTextbox) Init(self page.ControlI, parent page.ControlI, id string) 
 
 // SetFormats sets the format of the text allowed. The format is any allowable format
 // that datetime or time can convert.
-func (d *DateTextbox) SetFormats(formats []string) DateI {
+func (d *TimeTextbox) SetFormats(formats []string) DateI {
 	d.formats = formats
 	return d
 }
 
 // Formats returns the format string specified previously
-func (d *DateTextbox) Formats() []string {
+func (d *TimeTextbox) Formats() []string {
 	return d.formats
 }
 
-// SetValue will set the DateTextbox to the given value if possible.
-func (d *DateTextbox) SetValue(val interface{}) page.ControlI {
+// SetValue will set the TimeTextbox to the given value if possible.
+func (d *TimeTextbox) SetValue(val interface{}) page.ControlI {
 	switch v := val.(type) {
 	case string:
 		d.SetText(v)
@@ -66,14 +66,14 @@ func (d *DateTextbox) SetValue(val interface{}) page.ControlI {
 	return d
 }
 
-func (d *DateTextbox) layouts() []string {
+func (d *TimeTextbox) layouts() []string {
 	return d.formats
 }
 
 // parseDate will parse the given string using the layouts in the textbox until it finds one that does not
 // result in an error, or until it exhausts all the layouts. The resulting date will be the first second of that
 // day in the timezone of the browser.
-func (d *DateTextbox) parseDate(request *page.RequestContext, s string) (result time.Time, layoutUsed string, err error) {
+func (d *TimeTextbox) parseDate(request *page.RequestContext, s string) (result time.Time, layoutUsed string, err error) {
 	for _, layoutUsed = range d.layouts() {
 		if request != nil && time2.LayoutHasDate(layoutUsed) && time2.LayoutHasTime(layoutUsed) {
 			result, err = time2.ParseInOffset(layoutUsed, s, request.ClientTimezone(), request.ClientTimezoneOffset())
@@ -90,7 +90,7 @@ func (d *DateTextbox) parseDate(request *page.RequestContext, s string) (result 
 // SetText sets the DateTime to the given text. If you attempt set the text to something that is not
 // convertible to a date, an empty string will be entered. The resulting datetime will be in UTC time.
 // Use SetDate if you want to make sure the date is in a certain timezone.
-func (d *DateTextbox) SetText(s string) page.ControlI {
+func (d *TimeTextbox) SetText(s string) page.ControlI {
 	v, layout, err := d.parseDate(nil, s)
 
 	if err == nil {
@@ -104,7 +104,7 @@ func (d *DateTextbox) SetText(s string) page.ControlI {
 }
 
 // SetDate will set the textbox to the give time
-func (d *DateTextbox) SetDate(t time.Time) {
+func (d *TimeTextbox) SetDate(t time.Time) {
 	s := t.Format(d.layouts()[0])
 	d.Textbox.SetText(s)
 	d.time = t
@@ -112,7 +112,7 @@ func (d *DateTextbox) SetDate(t time.Time) {
 
 // Value returns the value as an interface, but the underlying value will be a datetime.
 // If a bad value was entered into the textbox, it will return an empty datetime.
-func (d *DateTextbox) Value() interface{} {
+func (d *TimeTextbox) Value() interface{} {
 	return d.time
 }
 
@@ -120,11 +120,11 @@ func (d *DateTextbox) Value() interface{} {
 // The result is the first second of the entered date in the timezone of the browser.
 //
 // If a bad value was entered into the textbox, it will return a zero time.
-func (d *DateTextbox) Date() time.Time {
+func (d *TimeTextbox) Date() time.Time {
 	return d.time
 }
 
-func (d *DateTextbox) UpdateFormValues(request *page.RequestContext) {
+func (d *TimeTextbox) UpdateFormValues(request *page.RequestContext) {
 	d.Textbox.UpdateFormValues(request)
 
 	if d.readonly {
@@ -151,7 +151,7 @@ func (d *DateTextbox) UpdateFormValues(request *page.RequestContext) {
 }
 
 // Serialize encodes the control into the pagestate
-func (d *DateTextbox) Serialize(e page.Encoder) {
+func (d *TimeTextbox) Serialize(e page.Encoder) {
 	d.Textbox.Serialize(e)
 	if err := e.Encode(d.formats); err != nil {
 		panic(err)
@@ -162,7 +162,7 @@ func (d *DateTextbox) Serialize(e page.Encoder) {
 }
 
 // Deserialize recreates the control from the pagestate
-func (d *DateTextbox) Deserialize(dec page.Decoder) {
+func (d *TimeTextbox) Deserialize(dec page.Decoder) {
 	d.Textbox.Deserialize(dec)
 	if err := dec.Decode(&d.formats); err != nil {
 		panic(err)
@@ -198,9 +198,9 @@ func (v DateValidator) Validate(c page.ControlI, s string) (msg string) {
 	return
 }
 
-// DateTextboxCreator creates a date textbox.
+// TimeTextboxCreator creates a TimeTextbox.
 // Pass it to AddControls of a control, or as a Child of a FormFieldWrapperCreator.
-type DateTextboxCreator struct {
+type TimeTextboxCreator struct {
 	// ID is the control id of the html widget and must be unique to the page
 	ID string
 	// Placeholder is the placeholder attribute of the textbox and shows as help text inside the field
@@ -232,14 +232,14 @@ type DateTextboxCreator struct {
 }
 
 // Create creates a new control from the creator.
-func (c DateTextboxCreator) Create(ctx context.Context, parent page.ControlI) page.ControlI {
-	ctrl := NewDateTextbox(parent, c.ID)
+func (c TimeTextboxCreator) Create(ctx context.Context, parent page.ControlI) page.ControlI {
+	ctrl := NewTimeTextbox(parent, c.ID)
 	c.Init(ctx, ctrl)
 	return ctrl
 }
 
 // Init initializes the creator.
-func (c DateTextboxCreator) Init(ctx context.Context, ctrl DateI) {
+func (c TimeTextboxCreator) Init(ctx context.Context, ctrl DateI) {
 	if c.Formats != nil {
 		ctrl.SetFormats(c.Formats)
 	}
@@ -258,14 +258,14 @@ func (c DateTextboxCreator) Init(ctx context.Context, ctrl DateI) {
 	sub.Init(ctx, ctrl)
 }
 
-// GetDateTextbox is a convenience method to return the control with the given id from the page.
-func GetDateTextbox(c page.ControlI, id string) *DateTextbox {
-	dt, _ := c.Form().GetControl(id).(*DateTextbox)
+// GetTimeTextbox is a convenience method to return the control with the given id from the page.
+func GetTimeTextbox(c page.ControlI, id string) *TimeTextbox {
+	dt, _ := c.Form().GetControl(id).(*TimeTextbox)
 	return dt
 }
 
 func init() {
 	gob.Register(DateValidator{})
 
-	page.RegisterControl(func() page.ControlI { return new(DateTextbox) })
+	page.RegisterControl(func() page.ControlI { return new(TimeTextbox) })
 }

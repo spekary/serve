@@ -7,12 +7,13 @@ import (
 	"html"
 	"io"
 	"iter"
+	maps2 "maps"
 	"reflect"
 
 	"github.com/goradd/base"
-	"github.com/goradd/goradd/pkg/orm/query"
-	"github.com/goradd/goradd/pkg/stringmap"
+	"github.com/goradd/gro/query"
 	"github.com/goradd/html5tag"
+	iter2 "github.com/goradd/iter"
 	"github.com/goradd/maps"
 	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/i18n"
@@ -706,7 +707,7 @@ func (c *ControlBase) DrawingAttributes(ctx context.Context) html5tag.Attributes
 		a.Set("aria-required", "true")
 	}
 
-	channels := stringmap.JoinStrings(c.watchedKeys, "=", ";")
+	channels := iter2.JoinSeq2(maps2.All(c.watchedKeys), "=", ";")
 
 	if channels != "" {
 		a.SetData("grWatch", channels)
@@ -1636,7 +1637,7 @@ type EventList []*event.Event
 type DataAttributeMap map[string]interface{}
 
 // Nodes is used by Creators to specify a list of nodes.
-func Nodes(n ...query.NodeI) []query.NodeI {
+func Nodes(n ...query.Node) []query.Node {
 	return n
 }
 
@@ -1719,4 +1720,16 @@ func init() {
 	gob.Register(new(maps.Map[string, SavedState]))
 	gob.Register(new(eventMap))
 	gob.Register(new(map[event.EventID]*event.Event))
+}
+
+// MockFormValue will mock the process of getting a form value from an HTTP response for
+// testing purposes. This includes calling UpdateFormValues and Validate on the control.
+// It returns the result of the Validate function.
+// This is only for testing.
+func (c *ControlBase) MockFormValue(value string) bool {
+	ctx := NewMockContext()
+	request := GetRequest(ctx)
+	request.formVars.Set(c.ID(), value)
+	c.this().UpdateFormValues(request)
+	return c.this().Validate(ctx)
 }

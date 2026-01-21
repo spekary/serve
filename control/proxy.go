@@ -7,12 +7,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/goradd/goradd/pkg/crypt"
-	"github.com/goradd/goradd/pkg/javascript"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/page"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
+	"github.com/goradd/serve/page/javascript"
 )
 
 type ProxyI interface {
@@ -75,7 +74,7 @@ func (p *Proxy) this() ProxyI {
 // prevent potential accidental multiple form submissions. All events fired after this event fires will be lost. It is
 // intended to be used when the action will result in navigating to a new page.
 func (p *Proxy) OnSubmit(action action.ActionI) page.ControlI {
-	return p.On(event.Click().Terminating().Delay(250), action)
+	return p.On(event.Click().Terminating().Delay(250).Action(action))
 }
 
 // Draw is used by the form engine to draw the control. As a proxy, there is no html to draw, but this is where the scripts attached to the
@@ -113,7 +112,7 @@ func (p *Proxy) LinkHtml(ctx context.Context,
 
 	// These next two lines allow the proxy to work even when javascript is off.
 	av := page.HtmlVarAction + "=" + p.ID() + "_" + actionValue
-	av += "&" + page.HtmlVarPagestate + "=" + crypt.SessionEncryptUrlValue(ctx, p.Form().Page().StateID())
+	av += "&" + page.HtmlVarPagestate + "=" + p.Form().Page().StateID()
 
 	if !strings.ContainsRune(href, '?') {
 		href += "?" + av

@@ -5,8 +5,8 @@ import (
 	"encoding/gob"
 	"strconv"
 
-	"github.com/goradd/goradd/pkg/strings"
 	"github.com/goradd/serve/i18n"
+	"github.com/goradd/strings"
 
 	"github.com/goradd/serve/page"
 )

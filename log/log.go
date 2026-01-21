@@ -35,9 +35,9 @@ func Error(ctx context.Context, module string, msg string, args ...any) {
 		ctx = context.Background()
 	}
 	if module != "" {
-		l.ErrorContext(ctx, msg, slog.Group(module, args))
+		l.ErrorContext(ctx, msg, slog.Group(module, args...))
 	} else {
-		l.ErrorContext(ctx, msg, args)
+		l.ErrorContext(ctx, msg, args...)
 	}
 }
 
@@ -56,9 +56,9 @@ func Warn(ctx context.Context, module string, msg string, args ...any) {
 		ctx = context.Background()
 	}
 	if module != "" {
-		l.WarnContext(ctx, msg, slog.Group(module, args))
+		l.WarnContext(ctx, msg, slog.Group(module, args...))
 	} else {
-		l.WarnContext(ctx, msg, args)
+		l.WarnContext(ctx, msg, args...)
 	}
 }
 
@@ -74,9 +74,9 @@ func Info(ctx context.Context, module string, msg string, args ...any) {
 		ctx = context.Background()
 	}
 	if module != "" {
-		logger.InfoContext(ctx, msg, slog.Group(module, args))
+		logger.InfoContext(ctx, msg, slog.Group(module, args...))
 	} else {
-		logger.InfoContext(ctx, msg, args)
+		logger.InfoContext(ctx, msg, args...)
 	}
 }
 
@@ -92,9 +92,9 @@ func Debug(ctx context.Context, module string, msg string, args ...any) {
 		ctx = context.Background()
 	}
 	if module != "" {
-		logger.DebugContext(ctx, msg, slog.Group(module, args))
+		logger.DebugContext(ctx, msg, slog.Group(module, args...))
 	} else {
-		logger.DebugContext(ctx, msg, args)
+		logger.DebugContext(ctx, msg, args...)
 	}
 }
 

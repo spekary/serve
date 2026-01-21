@@ -7,12 +7,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goradd/goradd/pkg/config"
+	"github.com/goradd/serve/config"
 
-	"github.com/goradd/goradd/pkg/pool"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/log"
 	"github.com/goradd/serve/page"
+	"github.com/goradd/serve/pool"
 )
 
 type LabelAttributer interface {

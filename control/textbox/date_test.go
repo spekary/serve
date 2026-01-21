@@ -11,7 +11,7 @@ import (
 func TestDateTextbox(t *testing.T) {
 	p := page.NewMockForm()
 
-	d := NewDateTextbox(p, "")
+	d := NewTimeTextbox(p, "")
 	d.SetText("2/19/2019 3:04 pm")
 	assert.Equal(t, time.February, d.Date().Month())
 	assert.Equal(t, 19, d.Date().Day())

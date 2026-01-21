@@ -19,11 +19,10 @@ func TestPasswordTextbox(t *testing.T) {
 	p.SetAttribute("a", "b")
 
 	var buf bytes.Buffer
-	e := page.GobPageEncoder{}
-	enc := e.NewEncoder(&buf)
+	enc := page.NewEncoderFunc(&buf)
 	p.Serialize(enc)
 
-	dec := e.NewDecoder(&buf)
+	dec := page.NewDecoderFunc(&buf)
 	p2 := NewPasswordTextbox(f, "")
 	p2.Deserialize(dec)
 	assert.Equal(t, "", p2.value)

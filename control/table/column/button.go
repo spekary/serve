@@ -6,9 +6,9 @@ import (
 	table2 "github.com/goradd/serve/control/table"
 	"github.com/goradd/serve/page/event"
 
-	"github.com/goradd/goradd/pkg/javascript"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/serve/page"
+	"github.com/goradd/serve/page/javascript"
 )
 
 // ButtonColumnClick returns an event that detects a click on the icon in the column.

@@ -10,9 +10,10 @@ package assets
 
 import (
 	"embed"
+	"path"
+
 	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/http"
-	"path"
 )
 
 //go:embed css js
@@ -20,5 +21,5 @@ var a embed.FS
 
 func init() {
 	// The path below is the same path the assets should be copied to for deployment.
-	http.RegisterAssetDirectory(path.Join(config.AssetPrefix, "goradd"), a)
+	http.RegisterAssetDirectory(path.Join(config.AssetPath, "goradd"), a)
 }

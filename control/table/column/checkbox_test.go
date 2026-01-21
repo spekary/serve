@@ -32,7 +32,7 @@ func TestCheckboxColumn_Serialize(t *testing.T) {
 					ID:               "a1",
 					CheckboxProvider: DefaultCheckboxProvider{},
 					Title:            "CheckboxList",
-					Sortable:         true,
+					SortDirection:    table2.NotSorted,
 					ColumnOptions: table2.ColumnOptions{
 						CellAttributes:   nil,
 						HeaderAttributes: nil,

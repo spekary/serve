@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/goradd/goradd/pkg/any"
-	time2 "github.com/goradd/goradd/pkg/time"
+	"github.com/goradd/anyutil"
 	"github.com/goradd/serve/page/action"
 	"github.com/goradd/serve/page/event"
+	time2 "github.com/goradd/serve/time"
 
-	"github.com/goradd/goradd/pkg/base"
-	"github.com/goradd/goradd/pkg/config"
+	"github.com/goradd/base"
 	"github.com/goradd/html5tag"
+	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/page"
 )
 
@@ -413,7 +414,7 @@ func (c *ColumnBase) DrawCell(ctx context.Context, row int, col int, data interf
 }
 
 // CellText returns the text in the cell. It will use the CellTexter if one was provided.
-func (c *ColumnBase) CellText(ctx context.Context, row int, col int, data interface{}) string {
+func (c *ColumnBase) CellText(ctx context.Context, row int, col int, data any) string {
 	if c.cellTexter != nil {
 		info := CellInfo{RowNum: row, ColNum: col, Data: data}
 		return c.cellTexter.CellText(ctx, c.this(), info)
@@ -731,7 +732,7 @@ func (c *ColumnBase) ApplyOptions(ctx context.Context, parent TableI, opt Column
 // ApplyFormat is used by table columns to apply the given fmt.Sprintf and time.Format strings to the data.
 // It is exported to allow custom cell Texter objects to use it.
 // For slice data, the format is applied to each item in the slice and each item is separated with a comma.
-func (c *ColumnBase) ApplyFormat(data interface{}) string {
+func (c *ColumnBase) ApplyFormat(data any) string {
 	var out string
 
 	switch d := data.(type) {
@@ -767,18 +768,48 @@ func (c *ColumnBase) ApplyFormat(data interface{}) string {
 		}
 	case nil:
 		return ""
+	case []string:
+		if c.format == "" {
+			out = strings.Join(d, ", ")
+		} else {
+			var b strings.Builder
+			for i, s := range d {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(fmt.Sprintf(c.format, s))
+			}
+			out = b.String()
+		}
+	case []int:
+		format := c.format
+		if c.format == "" {
+			format = "%d"
+		}
+		var b strings.Builder
+		for i, v := range d {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(fmt.Sprintf(format, v))
+		}
+		out = b.String()
 	default:
 		var format = c.format
 		if format == "" {
 			format = `%v`
 		}
-		if any.IsSlice(d) {
-			s := any.InterfaceSlice(d)
-			var items []string
-			for _, i := range s {
-				items = append(items, fmt.Sprintf(format, i))
+		if anyutil.IsSlice(d) {
+			sliceValue := reflect.ValueOf(data)
+			var b strings.Builder
+
+			for i := 0; i < sliceValue.Len(); i++ {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(fmt.Sprintf(format, sliceValue.Index(i).Interface()))
 			}
-			return strings.Join(items, ", ")
+			out = b.String()
 		} else {
 			out = fmt.Sprintf(format, d)
 		}

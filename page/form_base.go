@@ -8,13 +8,13 @@ import (
 	http2 "net/http"
 	"path"
 
-	"github.com/goradd/goradd/pkg/messageServer"
 	"github.com/goradd/html5tag"
 	"github.com/goradd/maps"
 	"github.com/goradd/serve/config"
 	"github.com/goradd/serve/http"
 	"github.com/goradd/serve/i18n"
 	"github.com/goradd/serve/log"
+	"github.com/goradd/serve/messenger"
 	"golang.org/x/text/language"
 )
 
@@ -70,9 +70,9 @@ type FormBase struct {
 	importedStyleSheets headerItem // when refreshing, these get moved to the headerStyleSheets
 	headerJavaScripts   headerItem
 	bodyJavaScripts     headerItem
-	importedJavaScripts headerItem   // when refreshing, these get moved to the bodyJavaScripts
-	csrf                string       // csrf attack check string
-	language            language.Tag // The i18n language tag matched from the request header and the supported languages.
+	importedJavaScripts headerItem // when refreshing, these get moved to the bodyJavaScripts
+	csrf                string     // csrf attack check string
+	languageIndex       int        // The index into the list of i18n languages supported by the app that the web page will be translated into.
 }
 
 func (f *FormBase) Init(self FormI, id string) {
@@ -93,11 +93,12 @@ func (f *FormBase) SetupNewForm(ctx context.Context) {
 
 	// Cache and save the language tag for situations
 	// where we do not have the context
-	f.language, _ = i18n.LanguageFromContext(ctx)
+	_, f.languageIndex, _ = i18n.LanguageFromContext(ctx)
 }
 
 func (f *FormBase) LanguageTag() language.Tag {
-	return f.language
+	l, _ := i18n.LanguageFromIndex(f.languageIndex)
+	return l
 }
 
 func (f *FormBase) GetControl(id string) ControlI {
@@ -226,8 +227,8 @@ func (f *FormBase) PageDrawingFunction() PageDrawFunc {
 // to the form, and then call this parent version of the function to get the default functionality.
 func (f *FormBase) AddRelatedFiles() {
 	f.this().AddFrameworkFiles()
-	if messageServer.Messenger != nil {
-		files := messageServer.Messenger.JavascriptFiles()
+	if messenger.Messenger != nil {
+		files := messenger.Messenger.JavascriptFiles()
 		for file, attr := range files {
 			f.AddJavaScriptFile(file, false, attr)
 		}
@@ -463,7 +464,7 @@ func (f *FormBase) Serialize(e Encoder) {
 	if err := e.Encode(f.csrf); err != nil {
 		panic(err)
 	}
-	if err := e.Encode(f.language); err != nil {
+	if err := e.Encode(f.languageIndex); err != nil {
 		panic(err)
 	}
 }
@@ -496,7 +497,7 @@ func (f *FormBase) Deserialize(d Decoder) {
 	if err := d.Decode(&f.csrf); err != nil {
 		panic(err)
 	}
-	if err := d.Decode(&f.language); err != nil {
+	if err := d.Decode(&f.languageIndex); err != nil {
 		panic(err)
 	}
 
@@ -514,13 +515,13 @@ type MockForm struct {
 
 func NewMockForm() *MockForm {
 	f := new(MockForm)
-	f.setPage(new(Page))
-	f.Init("MockFormID")
+	f.Init(f, "MockFormID")
 	return f
 }
 
-func (f *MockForm) Init(id string) {
-	f.FormBase.Init(f, id)
+func (f *MockForm) Init(self FormI, id string) {
+	f.setPage(new(Page))
+	f.FormBase.Init(self, id)
 }
 
 func (f *MockForm) AddRelatedFiles() {

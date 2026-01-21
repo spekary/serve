@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	strings2 "github.com/goradd/goradd/pkg/strings"
 	"github.com/goradd/serve/log"
+	strings2 "github.com/goradd/strings"
 )
 
 // Params are sent to the control.DoAction() function in response to a user action.

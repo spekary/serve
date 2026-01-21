@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	reflect2 "github.com/goradd/goradd/pkg/any"
+	"github.com/goradd/anyutil"
 	"github.com/goradd/html5tag"
 	control2 "github.com/goradd/serve/control"
 	"github.com/goradd/serve/i18n"
@@ -168,9 +168,8 @@ func (l *MultiselectList) SetValue(v interface{}) {
 	default:
 		if v2, ok := v.(ItemIDer); ok {
 			l.selectedValues[v2.ID()] = true
-		} else if reflect2.IsSlice(v) {
-			items := reflect2.InterfaceSlice(v)
-			for _, item := range items {
+		} else if anyutil.IsSlice(v) {
+			for item := range anyutil.SliceIter(v) {
 				if v2, ok := item.(ItemIDer); ok {
 					l.selectedValues[v2.ID()] = true
 				}
