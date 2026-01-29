@@ -7,7 +7,8 @@
         Key/value groups should be comma separated.
         Values should be strings, either returned from a function, or quoted.
         "class" and "style" attribute values will be merged in to the control's class and style attribute
-    For example: {{draw mycontrol, {"class":"myclass"} }}
+    For example: --draw mycontrol, {"class":"myclass"} --
+}}
 {{define draw 2}}
 {{if `$2` == ""}}
     {{g ctrl.Form().GetControl("$1").Draw(ctx, _w) }}
@@ -99,9 +100,7 @@ if ctrl.Form().HasControl("$1") {
 }}
 {{end addClass}}
 
-{{define localPath 1}}
-{{= http.MakeLocalPath("$1") }}
-{{end localPath}}
+{{define localPath 1}}{{= http.MakeLocalPath("$1") }}{{end localPath}}
 
 {{# This defaults the package fragment to the name of the directory of the template. You can redefine it if needed in your individual template}}
 {{define package}}{{templateParent}}{{end package}}
@@ -113,8 +112,11 @@ package {{put package}}
 
 import (
     "context"
-    "github.com/goradd/goradd/pkg/page"
     "bytes"
+
+    "github.com/goradd/serve/page"
+    "github.com/goradd/html5tag"
+
     {{put? imports}}
 )
 
@@ -198,7 +200,10 @@ package {{put package}}
 import (
     "context"
     "io"
-    "github.com/goradd/goradd/pkg/page/control"
+    "html"
+    "github.com/goradd/serve/page"
+    "github.com/goradd/serve/control"
+	"github.com/goradd/serve/http"
 
     {{put? imports}}
 )
@@ -224,7 +229,7 @@ func (ctrl *{{control }}) DrawTemplate(ctx context.Context, _w io.Writer) (err e
 }
 
 func init() {
-	page.RegisterControl(new({{control }}))
+	page.RegisterControl(func() page.ControlI { return new({{control }}) } )
 }
 
 // {{control }}Creator creates a div control that draws a template.
@@ -241,7 +246,10 @@ func (c {{control }}Creator) Create(_ context.Context, parent page.ControlI) pag
 
 // Get{{control}} is a convenience method to return the {{control}} with the given id from the page.
 func Get{{control }} (c page.ControlI, id string) *{{control }} {
-	return c.Page().GetControl(id).(*{{control }})
+	return c.Form().GetControl(id).(*{{control }})
 }
 
 {{end renderPanel}}
+
+{{# translate static string to html string }}
+{{define tr 1}}{{!= ctrl.T(`$1`) }}{{end tr}}

@@ -290,9 +290,9 @@ Loop:
 			s, m, e := splitWhitespace(z.token.Data)
 			b.WriteString(s)
 			if m != "" {
-				b.WriteString("{{!= ctrl.T(`")
+				b.WriteString("{{tr `")
 				b.WriteString(m)
-				b.WriteString("`) }}")
+				b.WriteString("` }}")
 			}
 			b.WriteString(e)
 
@@ -362,7 +362,7 @@ func processPanelHtml(z *stepper, panelObj string, tag string) error {
 	b.WriteString("{{define template}}")
 	b.WriteString(s)
 	b.WriteString("{{end template}}\n")
-	b.WriteString("{{renderControlTemplate}}\n")
+	b.WriteString("{{renderPanel}}\n")
 
 	filename := strings2.CamelToSnake(panelObj)
 	filename = filepath.Join(outputPath, filename+extension)
@@ -401,17 +401,21 @@ func renderAttributes(attributes []html.Attribute) string {
 		b.WriteString(`":`)
 
 		if translatableAttrs[a.Key] {
-			b.WriteString(`"{{!= ctrl.T("`)
+			b.WriteRune('"')
+			b.WriteString("{{tr `")
 			b.WriteString(a.Val)
-			b.WriteString(`") }}"`)
+			b.WriteString("` }}")
+			b.WriteRune('"')
 		} else if urlAttributes[a.Key] {
-			b.WriteString(`html.MakeLocalPath("`)
+			b.WriteRune('"')
+			b.WriteString(`{{localPath `)
 			b.WriteString(a.Val)
-			b.WriteString(`")`)
+			b.WriteString(` }}`)
+			b.WriteRune('"')
 		} else {
-			b.WriteString(`"`)
+			b.WriteRune('"')
 			b.WriteString(a.Val)
-			b.WriteString(`"`)
+			b.WriteRune('"')
 		}
 	}
 	if b.Len() == 0 {
@@ -479,13 +483,13 @@ func renderTag(z *stepper) string {
 		}
 		b.WriteString(`="`)
 		if translatableAttrs[a.Key] {
-			b.WriteString(`{{!= ctrl.T("`)
+			b.WriteString("{{tr `")
 			b.WriteString(a.Val) // not html encoded
-			b.WriteString(`") }}`)
+			b.WriteString("` }}")
 		} else if urlAttributes[a.Key] && a.Val != "#" {
-			b.WriteString(`{{= html.MakeLocalPath("`)
+			b.WriteString(`{{localPath `)
 			b.WriteString(a.Val)
-			b.WriteString(`") }}`)
+			b.WriteString(` }}`)
 		} else {
 			b.WriteString(a.Val)
 		}
