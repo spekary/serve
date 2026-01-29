@@ -235,7 +235,7 @@ func (f *FormBase) AddRelatedFiles() {
 	}
 }
 
-// addGoraddFiles is called by the framework to add the various goradd files to the form.
+// AddFrameworkFiles is called by the framework to add the various goradd files to the form.
 func (f *FormBase) AddFrameworkFiles() {
 	f.AddJavaScriptFile(path.Join(config.AssetPath, "goradd", "js", "goradd.js"), false, nil)
 	if !config.Release {

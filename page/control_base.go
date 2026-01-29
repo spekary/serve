@@ -133,7 +133,8 @@ type ControlI interface {
 	AddClass(class string) ControlI
 	RemoveClass(class string) ControlI
 	HasClass(class string) bool
-	SetStyles(html5tag.Style)
+	MergeStyles(html5tag.Style)
+	MergeStyleString(string)
 	SetStyle(name string, value string) ControlI
 	SetWidthStyle(w interface{}) ControlI
 	SetHeightStyle(w interface{}) ControlI
@@ -361,8 +362,15 @@ func (c *ControlBase) initBase(self ControlI) {
 	c.Base.Init(self)
 }
 
-func (c *ControlBase) SetStyles(style html5tag.Style) {
+// MergeStyles merges the given styles into the style attribute of the control.
+func (c *ControlBase) MergeStyles(style html5tag.Style) {
 	c.attributes.SetStyles(style)
+	c.Refresh() // TODO: Do this with javascript
+}
+
+// MergeStyleString merges the styles found in the css style string into the styles of the attributes.
+func (c *ControlBase) MergeStyleString(styles string) {
+	c.attributes.SetStylesTo(styles)
 	c.Refresh() // TODO: Do this with javascript
 }
 
