@@ -216,13 +216,14 @@ Loop:
 
 		case html.StartTagToken:
 			if voidElements[z.token.Data] {
-				// html5 allows these to not look like self closing tags, but still be treated as such
+				// html5 allows these to not look like self-closing tags, but still be treated as such
 				err = processVoidElement(z, b)
 				if err != nil {
 					return err
 				}
 				break // break out of switch
 			}
+			_, hasNoTranslate := getAttributeValue(noTranslateAttribute, z.token.Attr)
 			if _, ok := getAttributeValue(controlAttribute, z.token.Attr); ok {
 				// substitute tag for a control
 				if i, ok2 := getAttributeValue("id", z.token.Attr); !ok2 {
@@ -253,12 +254,10 @@ Loop:
 						return err
 					}
 				}
-			} else if _, ok := getAttributeValue(translateAttribute, z.token.Attr); ok || translatableTags[z.token.Data] {
+			} else if _, ok := getAttributeValue(translateAttribute, z.token.Attr); ok ||
+				(translatableTags[z.token.Data] && !hasNoTranslate) {
 				// translate innerHtml
 				b.WriteString(renderTag(z))
-				if z.token.Data == tag {
-					count++
-				}
 				err = processBodyElements(z, b, z.token.Data)
 				if err != nil {
 					return err
@@ -349,16 +348,19 @@ func getAttributeValue(key string, attrs []html.Attribute) (string, bool) {
 // Convert the inner html of a panel to a panel drawing template.
 func processPanelHtml(z *stepper, panelObj string, tag string) error {
 	var b bytes.Buffer
+	var b2 bytes.Buffer
+
+	err := processBodyElements(z, &b2, tag)
+	if err != nil {
+		return err
+	}
+	s := strings2.TrimShiftLines(b2.String())
 
 	b.WriteString("{{define control}}")
 	b.WriteString(panelObj)
 	b.WriteString("{{end control}}\n")
 	b.WriteString("{{define template}}")
-	err := processBodyElements(z, &b, tag)
-	if err != nil {
-		return err
-	}
-
+	b.WriteString(s)
 	b.WriteString("{{end template}}\n")
 	b.WriteString("{{renderControlTemplate}}\n")
 
