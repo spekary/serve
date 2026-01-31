@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 
 	"golang.org/x/net/html"
 )
@@ -64,7 +65,7 @@ func (s *stepper) findEndTag() (innerHtml string, err error) {
 	start := s.tokenEnd
 
 	for {
-		err := s.next()
+		err = s.next()
 		if err != nil {
 			return "", err
 		}
@@ -78,6 +79,8 @@ func (s *stepper) findEndTag() (innerHtml string, err error) {
 		} else if s.token.Type == html.StartTagToken &&
 			s.token.Data == tag {
 			count++
+		} else if s.token.Type == html.ErrorToken {
+			return "", fmt.Errorf("end token not found:" + tag)
 		}
 	}
 }

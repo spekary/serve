@@ -15,11 +15,23 @@ import (
 
 const (
 	formAttribute        = "data-form"
-	controlAttribute     = "data-control"
-	panelAttribute       = "data-panel"
-	translateAttribute   = "data-tr"
-	noTranslateAttribute = "data-notr"
+	controlAttribute     = "data-control"   // if it has a value, will generate a create function and draw as a serve control. Otherwise, will just draw as a serve control.
+	panelAttribute       = "data-panel"     // will generate a panel with a draw function, a create function and a draw tag.
+	translateAttribute   = "data-tr"        // force translate content if tag is not normally translated
+	noTranslateAttribute = "data-notr"      // force NOT translating if tag is normally translated
+	saveStateAttribute   = "data-savestate" // Goes with a data-control value to set SaveState(true)
+	eventsAttribute      = "data-events"    // Goes with a data-control value to specify actions based on events.
 )
+
+var customAttributes = map[string]bool{
+	formAttribute:        true,
+	controlAttribute:     true,
+	panelAttribute:       true,
+	translateAttribute:   true,
+	saveStateAttribute:   true,
+	eventsAttribute:      true,
+	noTranslateAttribute: true,
+}
 
 // These attributes will always be translated
 var translatableAttrs = map[string]bool{
@@ -103,7 +115,7 @@ func parse(outputPath string, files ...string) {
 		base := filepath.Base(filename)
 		base = base + extension
 		newFileName := filepath.Join(outputPath, base)
-		out := process(src)
+		out := processFormFile(src)
 		if err = os.WriteFile(newFileName, out, os.ModePerm); err != nil {
 			slog.Error("failed to write file", "Filename", newFileName, "Error", err)
 			continue
@@ -111,12 +123,13 @@ func parse(outputPath string, files ...string) {
 	}
 }
 
-func process(src []byte) []byte {
-	var b bytes.Buffer
+func processFormFile(src []byte) []byte {
+	var templateBuffer bytes.Buffer
+	var creatorsBuffer bytes.Buffer
 
 	title := extractTitle(src)
 	if title != "" {
-		b.WriteString(renderBlockDefine("title", title))
+		templateBuffer.WriteString(renderBlockDefine("title", title))
 	}
 	z := newStepper(src)
 	err := z.findStartTag("form")
@@ -131,21 +144,28 @@ func process(src []byte) []byte {
 		return nil
 	}
 
-	b.WriteString(renderBlockDefine("form", f))
+	templateBuffer.WriteString(renderBlockDefine("form", f))
 	fa := renderAttributes(z.token.Attr)
 	if fa != "" {
-		b.WriteString(renderBlockDefine("form-attr", fa))
+		templateBuffer.WriteString(renderBlockDefine("form-attr", fa))
 	}
 
-	b.WriteString("{{define template}}")
-	err = processBodyElements(z, &b, "form")
+	templateBuffer.WriteString("{{define template}}")
+	err = processBodyElements(z, &templateBuffer, &creatorsBuffer, "form")
 	if err != nil {
-		slog.Error("failed to process form", "Error", err)
+		slog.Error("failed to processFormFile form", "Error", err)
 		return nil
 	}
-	b.WriteString("\n{{end template}}\n")
-	b.WriteString("\n{{renderFormTemplate}}\n")
-	return b.Bytes()
+	templateBuffer.WriteString("{{end template}}\n")
+
+	if creatorsBuffer.Len() > 0 {
+		templateBuffer.WriteString("\n{{define creators}}\n")
+		templateBuffer.Write(creatorsBuffer.Bytes())
+		templateBuffer.WriteString("\n{{end creators}}\n")
+	}
+
+	templateBuffer.WriteString("\n{{renderFormTemplate}}\n")
+	return templateBuffer.Bytes()
 }
 
 func extractTitle(src []byte) string {
@@ -197,7 +217,12 @@ func extractTitle(src []byte) string {
 
 // processBodyElements walks through the html, substituting got commands for known
 // elements and issues.
-func processBodyElements(z *stepper, b *bytes.Buffer, tag string) error {
+// When this is complete, the end tag for tag will have been read, but not written.
+func processBodyElements(z *stepper,
+	templateBuffer *bytes.Buffer,
+	creatorsBuffer *bytes.Buffer,
+	tag string) error {
+
 	var count = 1
 
 Loop:
@@ -209,7 +234,7 @@ Loop:
 
 		switch z.token.Type {
 		case html.SelfClosingTagToken:
-			err = processVoidElement(z, b)
+			err = processVoidElement(z, templateBuffer, creatorsBuffer)
 			if err != nil {
 				return err
 			}
@@ -217,63 +242,91 @@ Loop:
 		case html.StartTagToken:
 			if voidElements[z.token.Data] {
 				// html5 allows these to not look like self-closing tags, but still be treated as such
-				err = processVoidElement(z, b)
+				err = processVoidElement(z, templateBuffer, creatorsBuffer)
 				if err != nil {
 					return err
 				}
 				break // break out of switch
 			}
-			_, hasNoTranslate := getAttributeValue(noTranslateAttribute, z.token.Attr)
-			if _, ok := getAttributeValue(controlAttribute, z.token.Attr); ok {
-				// substitute tag for a control
-				if i, ok2 := getAttributeValue("id", z.token.Attr); !ok2 {
-					return errors.New("A " + controlAttribute + " control must have an id")
-				} else {
-					b.WriteString(renderDrawControl(i, z.token.Attr)) // must go before findEndTag
-					_, err = z.findEndTag()
-					if err != nil {
-						return err
-					}
+
+			attr := z.token.Attr // preserve attributes of start tag
+
+			panelObj, hasPanel := getAttributeValue(panelAttribute, attr)
+			_, hasNoTranslate := getAttributeValue(noTranslateAttribute, attr)
+			_, hasTranslate := getAttributeValue(translateAttribute, attr)
+			controlType, hasControlAttribute := getAttributeValue(controlAttribute, attr)
+			id, hasID := getAttributeValue("id", attr)
+
+			if hasPanel {
+				if hasTranslate || hasNoTranslate {
+					return errors.New("A " + panelAttribute + " control cannot be translated since its content is extracted into a generated panel drawing function")
 				}
-			} else if panelObj, ok := getAttributeValue(panelAttribute, z.token.Attr); ok {
-				// substitute tag for a control that has a draw function
-				if i, ok2 := getAttributeValue("id", z.token.Attr); !ok2 {
+
+				// Use the content as a draw function for a control that we create as a panel.
+				if !hasID {
 					return errors.New("A " + panelAttribute + " control must have an id")
 				} else {
+					// Need to clone
 					if z.token.Data != "div" {
 						// Write code to set the tag of the panel
-						b.WriteString("{{setTag ")
-						b.WriteString(i)
-						b.WriteString(",")
-						b.WriteString(z.token.Data)
-						b.WriteString("}}")
+						templateBuffer.WriteString("{{setTag ")
+						templateBuffer.WriteString(id)
+						templateBuffer.WriteString(",")
+						templateBuffer.WriteString(z.token.Data)
+						templateBuffer.WriteString("}}")
 					}
-					b.WriteString(renderDrawControl(i, z.token.Attr))
 					err = processPanelHtml(z, panelObj, z.token.Data)
 					if err != nil {
 						return err
 					}
 				}
-			} else if _, ok := getAttributeValue(translateAttribute, z.token.Attr); ok ||
+				if !hasControlAttribute {
+					hasControlAttribute = true
+					controlType = panelObj
+				}
+			}
+
+			if hasControlAttribute {
+				if hasTranslate || hasNoTranslate {
+					return errors.New("A " + controlAttribute + " control cannot be translated since its content is controlled elsewhere")
+				}
+				// substitute tag for a control
+				if !hasID {
+					return errors.New("A " + controlAttribute + " control must have an id")
+				}
+				if controlType != "" {
+					// control attribute specifies a control type. Put it in the control creators.
+					templateBuffer.WriteString(renderDrawControl(id, nil)) // move attribute setting to control creation
+					saveControlCreator(creatorsBuffer, controlType, id, attr)
+				} else {
+					templateBuffer.WriteString(renderDrawControl(id, attr)) // must go before findEndTag
+				}
+				if !hasPanel {
+					// Read the end tag
+					if _, err = z.findEndTag(); err != nil {
+						return err
+					}
+				}
+			} else if hasTranslate ||
 				(translatableTags[z.token.Data] && !hasNoTranslate) {
 				// translate innerHtml
-				b.WriteString(renderTag(z))
-				err = processBodyElements(z, b, z.token.Data)
+				templateBuffer.WriteString(renderTag(z))
+				err = processBodyElements(z, templateBuffer, creatorsBuffer, z.token.Data) // recurse
 				if err != nil {
 					return err
 				}
-				b.Write(z.raw) // write the end tag
+				templateBuffer.Write(z.raw) // write the end tag
 			} else {
-				// process the content of the tag without trying to translate anything
+				// process the content of the tag without trying to process or translate anything
 				// A <code> tag is an example of something needing this treatment.
-				b.WriteString(renderTag(z))
+				templateBuffer.WriteString(renderTag(z))
 				var ih string
 				if ih, err = z.findEndTag(); err != nil {
 					return err
 				} else {
-					b.WriteString(ih) // write the inner html
+					templateBuffer.WriteString(ih) // write the inner html
 				}
-				b.Write(z.raw) // write the end tag
+				templateBuffer.Write(z.raw) // write the end tag
 			}
 
 		case html.EndTagToken:
@@ -284,17 +337,17 @@ Loop:
 				// done
 				return nil
 			}
-			b.Write(z.raw) // write the end tag
+			templateBuffer.Write(z.raw) // write the end tag
 
 		case html.TextToken:
 			s, m, e := splitWhitespace(z.token.Data)
-			b.WriteString(s)
+			templateBuffer.WriteString(s)
 			if m != "" {
-				b.WriteString("{{tr `")
-				b.WriteString(m)
-				b.WriteString("` }}")
+				templateBuffer.WriteString("{{tr `")
+				templateBuffer.WriteString(m)
+				templateBuffer.WriteString("` }}")
 			}
-			b.WriteString(e)
+			templateBuffer.WriteString(e)
 
 		default:
 			// eof
@@ -348,13 +401,14 @@ func getAttributeValue(key string, attrs []html.Attribute) (string, bool) {
 // Convert the inner html of a panel to a panel drawing template.
 func processPanelHtml(z *stepper, panelObj string, tag string) error {
 	var b bytes.Buffer
-	var b2 bytes.Buffer
+	var templateBuffer bytes.Buffer
+	var creatorsBuffer bytes.Buffer
 
-	err := processBodyElements(z, &b2, tag)
+	err := processBodyElements(z, &templateBuffer, &creatorsBuffer, tag)
 	if err != nil {
 		return err
 	}
-	s := strings2.TrimShiftLines(b2.String())
+	s := strings2.TrimShiftLines(templateBuffer.String())
 
 	b.WriteString("{{define control}}")
 	b.WriteString(panelObj)
@@ -362,6 +416,12 @@ func processPanelHtml(z *stepper, panelObj string, tag string) error {
 	b.WriteString("{{define template}}")
 	b.WriteString(s)
 	b.WriteString("{{end template}}\n")
+	if creatorsBuffer.Len() > 0 {
+		b.WriteString("{{define creators}}")
+		b.WriteString(creatorsBuffer.String())
+		b.WriteString("{{end creators}}\n")
+	}
+
 	b.WriteString("{{renderPanel}}\n")
 
 	filename := strings2.CamelToSnake(panelObj)
@@ -374,19 +434,7 @@ func renderAttributes(attributes []html.Attribute) string {
 	var b strings.Builder
 
 	for _, a := range attributes {
-		if a.Key == controlAttribute {
-			continue
-		}
-		if a.Key == panelAttribute {
-			continue
-		}
-		if a.Key == formAttribute {
-			continue
-		}
-		if a.Key == translateAttribute {
-			continue
-		}
-		if a.Key == noTranslateAttribute {
+		if customAttributes[a.Key] {
 			continue
 		}
 		if a.Key == "id" {
@@ -401,17 +449,14 @@ func renderAttributes(attributes []html.Attribute) string {
 		b.WriteString(`":`)
 
 		if translatableAttrs[a.Key] {
-			b.WriteRune('"')
-			b.WriteString("{{tr `")
+			// Got does not support a tag in a tag param
+			b.WriteString("ctrl.T(`")
 			b.WriteString(a.Val)
-			b.WriteString("` }}")
-			b.WriteRune('"')
+			b.WriteString("`)")
 		} else if urlAttributes[a.Key] {
-			b.WriteRune('"')
-			b.WriteString(`{{localPath `)
+			b.WriteString("http.MakeLocalPath(`")
 			b.WriteString(a.Val)
-			b.WriteString(` }}`)
-			b.WriteRune('"')
+			b.WriteString("`)")
 		} else {
 			b.WriteRune('"')
 			b.WriteString(a.Val)
@@ -425,15 +470,21 @@ func renderAttributes(attributes []html.Attribute) string {
 	return b.String()
 }
 
-func processVoidElement(z *stepper, b *bytes.Buffer) error {
-	if _, ok := getAttributeValue(controlAttribute, z.token.Attr); ok {
+func processVoidElement(z *stepper,
+	templateBuffer *bytes.Buffer,
+	creatorsBuffer *bytes.Buffer) error {
+	if v, ok := getAttributeValue(controlAttribute, z.token.Attr); ok {
 		if i, ok2 := getAttributeValue("id", z.token.Attr); !ok2 {
 			return errors.New("A " + controlAttribute + " control must have an id")
+		} else if v != "" {
+			// control attribute specifies a control type
+			templateBuffer.WriteString(renderDrawControl(i, nil)) // move attribute setting to control creation
+			saveControlCreator(creatorsBuffer, v, i, z.token.Attr)
 		} else {
-			b.WriteString(renderDrawControl(i, z.token.Attr))
+			templateBuffer.WriteString(renderDrawControl(i, z.token.Attr))
 		}
 	} else {
-		b.WriteString(renderTag(z))
+		templateBuffer.WriteString(renderTag(z))
 	}
 	return nil
 }
@@ -501,4 +552,48 @@ func renderTag(z *stepper) string {
 	b.WriteString(">")
 
 	return b.String()
+}
+
+func saveControlCreator(creatorsBuffer *bytes.Buffer,
+	controlType string,
+	id string,
+	attr []html.Attribute) {
+
+	if creatorsBuffer.Len() > 0 {
+		creatorsBuffer.WriteString("\n\n")
+	}
+
+	// controlType might have a package name
+	names := strings.Split(controlType, ".")
+	if len(names) == 2 {
+		creatorsBuffer.WriteString(names[0])
+		creatorsBuffer.WriteString(".New")
+		creatorsBuffer.WriteString(names[1])
+	} else {
+		creatorsBuffer.WriteString("New")
+		creatorsBuffer.WriteString(controlType)
+	}
+
+	creatorsBuffer.WriteString("(")
+	creatorsBuffer.WriteString(`ctrl, "`)
+	creatorsBuffer.WriteString(id)
+	creatorsBuffer.WriteString(`")`)
+
+	if _, ok := getAttributeValue(saveStateAttribute, attr); ok {
+		creatorsBuffer.WriteString(".\n\tSaveState(true)")
+	}
+	if v, ok := getAttributeValue(eventsAttribute, attr); ok {
+		events := strings.Split(v, ";")
+		for _, event := range events {
+			creatorsBuffer.WriteString(".\n\tOn(")
+			creatorsBuffer.WriteString(event)
+			creatorsBuffer.WriteString(")")
+		}
+	}
+	a := renderAttributes(attr)
+	if a != "" {
+		creatorsBuffer.WriteString(".\n\tMergeAttributes(Attributes")
+		creatorsBuffer.WriteString(a)
+		creatorsBuffer.WriteString(")")
+	}
 }

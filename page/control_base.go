@@ -189,7 +189,7 @@ type ControlI interface {
 	// SaveState tells the control whether to save the basic state of the control, so that when the form is reentered, the
 	// data in the control will remain the same. This is particularly useful if the control is used as a filter for the
 	// contents of another control.
-	SaveState(context.Context, bool)
+	SaveState(context.Context, bool) ControlI
 	MarshalState(m SavedState)
 	UnmarshalState(m SavedState)
 
@@ -1394,9 +1394,10 @@ func (c *ControlBase) T(message string, params ...interface{}) string {
 // is set to, so that if the user returns to the page, it will keep its value.
 // This function is also responsible for restoring the previously saved state of the control,
 // so call this only after you have set the default state of a control during creation or initialization.
-func (c *ControlBase) SaveState(ctx context.Context, saveIt bool) {
+func (c *ControlBase) SaveState(ctx context.Context, saveIt bool) ControlI {
 	c.shouldSaveState = saveIt
 	c.readState(ctx)
+	return c.this()
 }
 
 // This state is used by controls to restore the visual state of the control if the page is returned to. This is helpful

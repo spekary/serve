@@ -167,6 +167,14 @@ func (e *Event) Action(action action.ActionI) *Event {
 	return e
 }
 
+// Do is a shortcut for setting an Ajax action that has the given actionValue.
+//
+// The event will then cause the DoAction function to execute on the control.
+func (e *Event) Do(v any) *Event {
+	e.action = action.Do().ActionValue(v)
+	return e
+}
+
 // Validate overrides the controls validation setting just for this event.
 func (e *Event) Validate(v ValidationType) *Event {
 	e.validationOverride = v

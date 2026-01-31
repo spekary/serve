@@ -141,6 +141,14 @@ func (ctrl *{{form}}) DrawTemplate(ctx context.Context, _w io.Writer) (err error
 }}
 	return
 }
+
+// createTemplateControls creates the controls defined in the template.
+func (ctrl *{{form}}) createTemplateControls(ctx context.Context) {
+{{g
+{{put? creators}}
+}}
+}
+
 {{end renderFormTemplate}}
 
 {{# renderControlTemplate renders the template for the given control type.
