@@ -441,7 +441,7 @@ func renderAttributes(attributes []html.Attribute) string {
 			continue
 		}
 		if b.Len() == 0 {
-			b.WriteString(`{"`)
+			b.WriteString(`"`)
 		} else {
 			b.WriteString(`,"`)
 		}
@@ -466,7 +466,6 @@ func renderAttributes(attributes []html.Attribute) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	b.WriteString(`}`)
 	return b.String()
 }
 
@@ -580,7 +579,7 @@ func saveControlCreator(creatorsBuffer *bytes.Buffer,
 	creatorsBuffer.WriteString(`")`)
 
 	if _, ok := getAttributeValue(saveStateAttribute, attr); ok {
-		creatorsBuffer.WriteString(".\n\tSaveState(true)")
+		creatorsBuffer.WriteString(".\n\tSaveState(ctx, true)")
 	}
 	if v, ok := getAttributeValue(eventsAttribute, attr); ok {
 		events := strings.Split(v, ";")
@@ -592,8 +591,8 @@ func saveControlCreator(creatorsBuffer *bytes.Buffer,
 	}
 	a := renderAttributes(attr)
 	if a != "" {
-		creatorsBuffer.WriteString(".\n\tMergeAttributes(Attributes")
+		creatorsBuffer.WriteString(".\n\tMergeAttributes(html5tag.Attributes{")
 		creatorsBuffer.WriteString(a)
-		creatorsBuffer.WriteString(")")
+		creatorsBuffer.WriteString("})")
 	}
 }

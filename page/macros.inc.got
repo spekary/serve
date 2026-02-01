@@ -11,9 +11,9 @@
 }}
 {{define draw 2}}
 {{if `$2` == ""}}
-    {{g ctrl.Form().GetControl("$1").Draw(ctx, _w) }}
+    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").Draw(ctx, _w) }}
 {{else}}
-    {{g ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes($2)).Draw(ctx, _w) }}
+    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
 {{if}}
 {{end draw}}
 
@@ -23,7 +23,7 @@
 {{if `$2` == ""}}
     {{g ctrl.Form().GetControl(ctrl.ID() + "$1").Draw(ctx, _w) }}
 {{else}}
-    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes($2)).Draw(ctx, _w) }}
+    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
 {{if}}
 {{end drawChild}}
 
@@ -34,7 +34,7 @@
     {{if `$2` == ""}}
         {{g ctrl.Form().GetControl("$1").Draw(ctx, _w) }}
     {{else}}
-        {{g ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes($2)).Draw(ctx, _w) }}
+        {{g ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
     {{if}}
 {{if}}
 {{end drawIf}}
@@ -44,7 +44,7 @@
     {{if `$2` == ""}}
         {{g ctrl.Form().GetControl(ctrl.ID() + "$1").Draw(ctx, _w) }}
     {{else}}
-        {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes($2)).Draw(ctx, _w) }}
+        {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
     {{if}}
 {{if}}
 {{end drawChildIf}}
@@ -60,7 +60,7 @@
 {{define setAttributes 2}}
 {{g
 if ctrl.Form().HasControl("$1") {
-    ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes($2))
+    ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes{$2})
 }
 }}
 {{end setAttributes}}
@@ -68,7 +68,7 @@ if ctrl.Form().HasControl("$1") {
 {{define setChildAttributes 2}}
 {{g
 if ctrl.Form().HasControl(ctrl.ID() + "$1") {
-    ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes($2))
+    ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes{$2})
 }
 }}
 {{end setChildAttributes}}
@@ -78,7 +78,7 @@ if ctrl.Form().HasControl(ctrl.ID() + "$1") {
 {{define setLabelAttributes 2}}
 {{g
 if ctrl.Form().HasControl("$1") {
-    ctrl.Form().GetControl("$1").(control.LabelAttributer).LabelAttributes().MergeString(`$2`)
+    ctrl.Form().GetControl("$1").(control.LabelAttributer).LabelAttributes().Merge({$2})
 }
 }}
 {{end setLabelAttributes}}
@@ -86,7 +86,7 @@ if ctrl.Form().HasControl("$1") {
 {{define setChildLabelAttributes 2}}
 {{g
 if ctrl.Form().HasControl(ctrl.ID() + "$1") {
-    ctrl.Form().GetControl(ctrl.ID() + "$1").(control.LabelAttributer).LabelAttributes().MergeString(`$2`)
+    ctrl.Form().GetControl(ctrl.ID() + "$1").(control.LabelAttributer).LabelAttributes().MergeString({$2})
 }
 }}
 {{end setChildLabelAttributes}}
@@ -125,13 +125,13 @@ import (
 func (ctrl *{{form}}) AddHeadTags()  {
     ctrl.FormBase.AddHeadTags()
     if "{{put? title}}" != "" {
-        ctrl.Form().SetTitle("{{put? title}}")
+        ctrl.Form().Page().SetTitle("{{put? title}}")
     }
 
 	{{put? headTags}}
 
 	// deal with body attributes too
-    ctrl.Form().BodyAttributes = `{{put? bodyAttributes}}`
+    ctrl.Form().Page().BodyAttributes = `{{put? bodyAttributes}}`
 }
 
 // DrawTemplate draws the content of the matching form's template file.
