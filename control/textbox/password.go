@@ -46,7 +46,7 @@ func (t *PasswordTextbox) Serialize(e page.Encoder) {
 
 // SaveState normally is used to save the text of the control to restore it if the page is returned to.
 // This version panics, so that you never SaveState on a password text box.
-func (t *PasswordTextbox) SaveState(_ context.Context, _ bool) {
+func (t *PasswordTextbox) SaveState(_ context.Context, _ bool) page.ControlI {
 	panic("do not call SaveState on a password textbox as it would be a security risk")
 }
 
@@ -68,6 +68,7 @@ type PasswordTextboxCreator struct {
 	// The actual width is browser dependent. For better control, use a width style property.
 	ColumnCount int
 	// Text is the initial value of the textbox. Often it is best to load the value in a separate Load step after creating the control.
+	// When go 1.26 is launched, this should be a zero'd entity from the security package.
 	Text string
 
 	page.ControlOptions

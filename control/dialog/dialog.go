@@ -240,7 +240,7 @@ func (d *Dialog) SetButtonText(id string, text string) {
 func (d *Dialog) SetButtonStyle(id string, a html5tag.Style) {
 	bb := d.ButtonBar()
 	if ctrl := bb.FindChildControl(id); ctrl != nil {
-		ctrl.SetStyles(a)
+		ctrl.MergeStyles(a)
 	}
 }
 

@@ -182,10 +182,9 @@ func (c RepeaterCreator) Init(ctx context.Context, ctrl RepeaterI) {
 		ctrl.SetItemHtmler(c.ItemHtmler)
 	}
 	if c.DataProvider != nil {
-		ctrl.SetDataProvider(c.DataProvider)
+		ctrl.SetDataProviderID(c.DataProvider.ID())
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Form().GetControl(c.DataProviderID).(DataBinder)
-		ctrl.SetDataProvider(provider)
+		ctrl.SetDataProviderID(c.DataProviderID)
 	}
 
 	if c.Data != nil {

@@ -136,10 +136,9 @@ func (c OrderedListCreator) Init(ctx context.Context, ctrl OrderedListI) {
 	}
 
 	if c.DataProvider != nil {
-		ctrl.SetDataProvider(c.DataProvider)
+		ctrl.SetDataProviderID(c.DataProvider.ID())
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Form().GetControl(c.DataProviderID).(control.DataBinder)
-		ctrl.SetDataProvider(provider)
+		ctrl.SetDataProviderID(c.DataProviderID)
 	}
 
 	if c.NumberType != "" {

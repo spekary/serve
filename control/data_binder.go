@@ -18,7 +18,7 @@ type DataBinder interface {
 // A DataManagerI is the interface for the owner (the embedder) of the DataManager
 type DataManagerI interface {
 	page.ControlI
-	SetDataProvider(b DataBinder)
+	SetDataProviderID(id string)
 	HasDataProvider() bool
 	// SetData should be passed a slice of data items
 	SetData(data interface{})
@@ -37,8 +37,10 @@ type DataManager struct {
 	dataOffset int
 }
 
-func (d *DataManager) SetDataProvider(b DataBinder) {
-	d.dataProviderID = b.ID()
+// SetDataProviderID sets the id of the data provider. The data provider must be a control
+// whose id is registered with the form.
+func (d *DataManager) SetDataProviderID(id string) {
+	d.dataProviderID = id
 }
 
 func (d *DataManager) HasDataProvider() bool {

@@ -961,10 +961,9 @@ func (c TableCreator) Init(ctx context.Context, ctrl TableI) {
 	}
 
 	if c.DataProvider != nil {
-		ctrl.SetDataProvider(c.DataProvider)
+		ctrl.SetDataProviderID(c.DataProvider.ID())
 	} else if c.DataProviderID != "" {
-		provider := ctrl.Form().GetControl(c.DataProviderID).(control2.DataBinder)
-		ctrl.SetDataProvider(provider)
+		ctrl.SetDataProviderID(c.DataProviderID)
 	}
 
 	if c.Data != nil {
