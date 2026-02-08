@@ -30,8 +30,8 @@ type FormFieldWrapperI interface {
 	InstructionAttributes() html5tag.Attributes
 }
 
-// FormFieldWrapper is a GoRADD control that wraps other controls, and provides common companion
-// functionality like a form label, validation state display, and help text.
+// FormFieldWrapper is a Control that wraps other Controls, and provides common companion
+// functionality like a label, validation state display, and help text.
 type FormFieldWrapper struct {
 	page.ControlBase
 

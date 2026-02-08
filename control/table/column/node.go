@@ -5,14 +5,14 @@ import (
 
 	any "github.com/goradd/anyutil"
 	"github.com/goradd/gro/query"
-	table2 "github.com/goradd/serve/control/table"
+	"github.com/goradd/serve/control/table"
 	"github.com/goradd/serve/page"
 )
 
 // NodeColumn is a column that uses a query.NodeI to get its text out of data that is coming from the ORM.
 // Create it with NewNodeColumn
 type NodeColumn struct {
-	table2.ColumnBase
+	table.ColumnBase
 	node query.Node
 }
 
@@ -99,29 +99,29 @@ type NodeGetter interface {
 // those columns. The column slice would typically come from the table's SortColumns method, and the returned
 // slice would be passed to the database's OrderBy clause when building a query. Since this is a common use, it
 // will also add sort info to the nodes.
-func MakeNodeSlice(columns []table2.ColumnI) []query.Node {
-	var nodes []query.Node
+func MakeNodeSlice(columns []table.ColumnI) []query.Sorter {
+	var sorterNodes []query.Sorter
 	for _, c := range columns {
 		if getter, ok := c.(NodeGetter); ok {
 			node := getter.GetNode()
 			if node != nil {
 				if nodeSorter, ok2 := node.(query.Sorter); ok2 {
 					switch c.SortDirection() {
-					case table2.SortAscending:
+					case table.SortAscending:
 						nodeSorter.Ascending()
-					case table2.SortDescending:
+					case table.SortDescending:
 						nodeSorter.Descending()
 					}
+					sorterNodes = append(sorterNodes, nodeSorter)
+				} else {
+					panic("Column does not have a sort node.")
 				}
-				nodes = append(nodes, node)
-			} else {
-				panic("Column does not have a sort node.")
 			}
 		} else {
 			panic("Column is not a NodeGetter.")
 		}
 	}
-	return nodes
+	return sorterNodes
 }
 
 // NodeColumnCreator creates a column that treats each row as data from the ORM, and gets to that data using
@@ -138,12 +138,12 @@ type NodeColumnCreator struct {
 	Sortable bool
 	// SortDirection sets the initial sorting direction of the column, and will make the column sortable
 	// By default, the column is not sortable.
-	SortDirection table2.SortDirection
+	SortDirection table.SortDirection
 	// IsHtml indicates that the texter is producing HTML rather than text that should be escaped.
-	table2.ColumnOptions
+	table.ColumnOptions
 }
 
-func (c NodeColumnCreator) Create(ctx context.Context, parent table2.TableI) table2.ColumnI {
+func (c NodeColumnCreator) Create(ctx context.Context, parent table.TableI) table.ColumnI {
 	col := NewNodeColumn(c.Node)
 	if c.ID != "" {
 		col.SetID(c.ID)
@@ -152,7 +152,7 @@ func (c NodeColumnCreator) Create(ctx context.Context, parent table2.TableI) tab
 	if c.Sortable {
 		col.SetSortable()
 	}
-	if c.SortDirection != table2.NotSortable {
+	if c.SortDirection != table.NotSortable {
 		col.SetSortDirection(c.SortDirection)
 	}
 	col.ApplyOptions(ctx, parent, c.ColumnOptions)
@@ -160,5 +160,5 @@ func (c NodeColumnCreator) Create(ctx context.Context, parent table2.TableI) tab
 }
 
 func init() {
-	table2.RegisterColumn(NodeColumn{})
+	table.RegisterColumn(NodeColumn{})
 }

@@ -30,7 +30,8 @@ const sessionControlTypeState string = "goradd.controlType"
 
 const RequiredErrorMessage string = "A value is required"
 
-const ControlTypeDataAttribute = "grctl"
+const ControlTypeDataPrefix = "srv"
+const ControlTypeDataAttribute = "srv-ctl"
 
 // ValidationState is used internally by the framework to determine how the control's wrapper handles drawing validation error
 // messages. Different wrappers use it to set classes or attributes of the error message or the overall control.
@@ -95,9 +96,29 @@ type DataLoader interface {
 	Load(ctx context.Context) []any
 }
 
-// ControlI is the interface that all controls must support. The functions are implemented by the
-// ControlBase methods. See the ControlBase method implementation for a description of each method.
+// KeyLabeler is used by various controls that display collections of data, like
+// lists and tables.
+type KeyLabeler interface {
+	Key() string
+	Label() string
+}
 
+// Keyer is used by various controls that display collections of data, like
+// lists and tables.
+type Keyer interface {
+	Key() string
+}
+
+// ControlI is the interface that all controls must support, and provides a mechanism for calling
+// virtual functions on a Control that can be overridden by derived Controls, similar to
+// how C++ and Java classes work.
+//
+// The functions below have default implementations in the ControlBase structure.
+// Any control can call a function virtually by implementing a this() function that returns
+// an interface, and then calling that function through the interface.
+//
+// See the various implementations in the control package for examples of how to build a
+// Control using this pattern.
 type ControlI interface {
 	base.BaseI
 	treeNoder
@@ -219,25 +240,35 @@ type attributeScriptEntry struct {
 	commands []any  // parameters to the function
 }
 
-// ControlBase is the basis for UI controls and widgets in GoRADD.
-// It corresponds to a standard html form object or tag.
-// A ControlBase can also associate javascript
-// with itself to make sure the javascript is loaded on the page when the control is drawn, and can render
-// javascript that will initialize a custom javascript widget.
+// ControlBase is the basis for dynamic html elements.
 //
-// A ControlBase can have child Controls. It
-// can either allow the framework to automatically draw the child Controls as part of the inner-html of
-// the ControlBase, can use a template to draw the Child controls, or manually draw them. Controls form
-// a hierarchical tree structure, with the FormBase control being the root of the tree.
+// A Control corresponds to a standard html element enclosed by a tag, or a void tag.
 //
-// A ControlBase is part of a system that will reflect the state of the control between the client and server.
+// A void type control has no inner content, and is manipulated just through attributes.
+// A traditional html control can also have inner content, which can be text or html.
+//
+// The inner html of a control is drawn automatically by default, but you can also provide
+// a draw function through a template, or through manual Write commands on the draw buffer.
+//
+// A Control can have child Controls, which will be drawn in the inner html area
+// of the Control, forming a hierarchical tree structure,
+// with a Form control being the single root of the tree.
+//
+// A Control can associate javascript with itself to make sure the javascript
+// is loaded on the page when the control is drawn, and can render
+// javascript that will initialize a custom html control.
+//
+// The Serve javascript coordinates with Controls to synchronize data between the client and server.
 // When a user updates a control in the browser and performs an action that requires a response from the
-// server, the GoRADD javascript will gather all the changes in the form and send those to the server.
-// The control can read those values and update its own internal state, so that from the perspective
-// of the programmer referring to the control, the values in the ControlBase are the same as what the user sees in a browser.
+// server, the javascript will gather all the changes in the Form and send those to the server.
+// Controls read those values and update their internal state before responding to the action,
+// so that from the perspective of the programmer, the values in the Control are the same as what the
+// user sees in the browser.
 //
-// This ControlBase struct is a mixin that all controls should use. You would not normally create a ControlBase directly,
-// but rather create one of the "subclasses" of ControlBase.
+// This ControlBase struct is a mixin that all controls should use.
+// You would not normally create a ControlBase directly,
+// but rather create one of the derived controls found in the github.com/goradd/serve/control
+// package.
 type ControlBase struct {
 	base.Base
 	treeNode
@@ -708,8 +739,8 @@ func (c *ControlBase) HasAttribute(name string) bool {
 // tag of the control. This function is designed to only be called by ControlBase implementations.
 func (c *ControlBase) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.attributes.Copy()
-	a.SetID(c.id)          // make sure the control id is set at a minimum
-	a.SetData("grctl", "") // make sure control is registered. Overriding controls can put a control name here.
+	a.SetID(c.id)                           // make sure the control id is set at a minimum
+	a.SetData(ControlTypeDataAttribute, "") // Mark every control as a serve control
 
 	if c.isRequired {
 		a.Set("aria-required", "true")

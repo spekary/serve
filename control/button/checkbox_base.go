@@ -234,7 +234,7 @@ func (c *CheckboxBase) UpdateCheckboxFormValues(request *page.RequestContext) {
 		c.SetCheckedNoRefresh(v)
 	} else if request.RequestMode() == page.RequestModeServer && c.IsOnPage() {
 		// We will not get a value if an item is not checked. But since this is a POST, all values on page
-		// should send something if it is checked, therefore we know its not checked.
+		// should send something if it is checked, therefore we know it is not checked.
 		c.SetCheckedNoRefresh(false)
 	}
 }

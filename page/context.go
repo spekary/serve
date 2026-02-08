@@ -6,10 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 
 	http2 "github.com/goradd/serve/http"
@@ -39,9 +41,12 @@ const (
 	//RequestModeCustomAjax
 )
 
-const HtmlVarAction = "Goradd_Action"
-const HtmlVarPagestate = "Goradd__PageState"
-const htmlVarParams = "Goradd__Params"
+const (
+	HtmlVarAction    = HiddenInputPrefix + "Action"
+	HtmlVarPagestate = HiddenInputPrefix + "PageState"
+	tzInputName      = HiddenInputPrefix + "tz"
+	tzoInputName     = HiddenInputPrefix + "tzo"
+)
 
 // MultipartFormMax is the maximum size of a mult-part form that will be
 // stored in memory in bytes. This data is stored in the "Value" part of the multi-part form data.
@@ -233,7 +238,7 @@ func fillAppData(ctx context.Context, r *RequestContext) error {
 
 func processPageState(ctx context.Context, r *RequestContext) error {
 	var v string
-	v, _ = r.FormValue(htmlVarParams)
+	v, _ = r.FormValue(tzInputName)
 	if v == "" {
 		// javascript is turned off
 		// we are in a minimalist environment, where only buttons submit forms
@@ -253,23 +258,47 @@ func processPageState(ctx context.Context, r *RequestContext) error {
 	} else {
 		r.requestMode = RequestModeServer
 	}
-
+	processTimezoneInfo(ctx, r)
 	return processPageParams(ctx, r, v)
 }
 
-func processPageParams(ctx context.Context, r *RequestContext, v string) error {
-	type tzParams struct {
-		TimezoneOffset int    `json:"o"`
-		Timezone       string `json:"z"`
+func processTimezoneInfo(ctx context.Context, r *RequestContext) {
+	tz, _ := r.FormValue(tzInputName)
+	tzoString, _ := r.FormValue(tzoInputName)
+	tzo, err := strconv.Atoi(tzoString)
+	if err != nil {
+		slog.Warn("invalid TimezoneOffset string", "TimezoneOffset", tzoString)
+		return
 	}
 
+	if tz != "" {
+		if tzo > 24*60 || tzo < -24*60 {
+			slog.Warn("TimezoneOffset is out of range", "TimezoneOffset", tzo)
+			return
+		}
+		r.clientTimezoneOffset = tzo
+
+		if !strings2.IsASCII(tz) {
+			slog.Warn("invalid timezone name", "timezone", tz)
+		}
+
+		r.clientTimezone = tz
+		r.hasTimezoneInfo = true
+	} else if session.Has(ctx, session.TimezoneOffset) {
+		// recover previously set timezone from this session
+		r.hasTimezoneInfo = true
+		r.clientTimezoneOffset = session.GetInt(ctx, session.TimezoneOffset)
+		r.clientTimezone = session.GetString(ctx, session.Timezone)
+	}
+
+}
+
+func processPageParams(ctx context.Context, r *RequestContext, v string) error {
 	var params struct {
-		ControlValues map[string]map[string]interface{} `json:"controlValues"`
-		ControlID     string                            `json:"controlID"`
-		EventID       int                               `json:"EventID"`
-		Values        action.RawActionValues            `json:"ActionValues"`
-		RefreshIDs    []string                          `json:"refresh"`
-		TimezoneInfo  tzParams                          `json:"tz"`
+		ControlID  string                 `json:"controlID"`
+		EventID    int                    `json:"EventID"`
+		Values     action.RawActionValues `json:"ActionValues"`
+		RefreshIDs []string               `json:"refresh"`
 	}
 
 	var dec *json.Decoder

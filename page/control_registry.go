@@ -23,7 +23,7 @@ var controlRegistryIds = make(map[reflect.Type]uint64)
 // Example:
 //
 //	init() {
-//	  control.RegisterControl(func() control.ControlI {return new(MyControl)})
+//	  control.RegisterControl(func() page.ControlI {return new(MyControl)})
 //	}
 func RegisterControl(f CreateFunc) {
 	// As a control is added to the controlRegistry, it is assigned an id. That id is used to identify a control

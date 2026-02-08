@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	HtmlCsrfToken = "Goradd__Csrf"
+	HiddenInputPrefix = "Serve__"
+
+	HtmlCsrfToken = HiddenInputPrefix + "Csrf"
 )
 
 // CsrfError sentinel
