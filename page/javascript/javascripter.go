@@ -22,7 +22,7 @@ type JavaScripter interface {
 
 // JsonObjectType is used by the ajax processor in goradd.js to indicate that we are sending a special kind of
 // object to the browser. These are things like dates, closures, etc. that are not easily represented by JSON.
-const JsonObjectType = "goraddObject"
+const JsonObjectType = "objType"
 
 // ToJavaScript will convert the given value to javascript such that it can be embedded in a browser. If it can, it will
 // use the JavaScripter interface to do the conversion. Otherwise, it generally follows json encoding rules. Strings are

@@ -5,6 +5,7 @@
 
 
 const hiddenInputPrefix = "Serve__"; // corresponds with same in go code.
+const jsonObjectType = "objType"; // corresponds to same in go code.
 
 const changedControlIds = new Set();
 let ajaxError = false;
@@ -398,7 +399,7 @@ function applyCommand(cmd) {
             targets = [el];
         }
         const funcParts = cmd.func.split(".");
-        const args = cmd.params ?? [];
+        const args = unpackArray(cmd.params) ?? [];
 
         for (let target of targets) {
             let ctx = null;
@@ -478,6 +479,122 @@ async function processAjaxResponse(resp) {
         } else {
             window.location.assign(resp.loc);
         }
+    }
+}
+
+
+/**
+ * A parameter to send to a command. Could be values that cannot be normally
+ * represented in json, such as a Date.
+ *
+ * @typedef {Object} AjaxResponseCommandParam
+ * @property {string} objType     The type of a special data type.
+ * @property {string} [func]      Javascript to execute.
+ * @property {*[]} [params]       Function parameters.
+ * @property {string} [varName]   Variable name.
+ **/
+
+/**
+ * Convert from JSON return values into richer JS values.
+ *
+ * Supports special encoded objects:
+ * - closure: creates a Function from source (trusted only!)
+ * - date: decodes a date using unpackJsonDate
+ * - varName: resolves a dotted path from window (e.g. "console.log")
+ * - func: resolves and immediately calls a function, returning its result
+ *
+ * @param {any[] | null | undefined} arr
+ * @returns {any[] | null}
+ */
+function unpackArray(arr) {
+    if (!arr) return null;
+    return arr.map(unpackObj);
+}
+
+/**
+ * Resolve a dotted path starting from `window`.
+ * @param {string} path
+ * @returns {any}
+ */
+function resolveFromWindow(path) {
+    return path.split(".").reduce((cur, key) => cur?.[key], window);
+}
+
+/**
+ * @param {any} obj
+ * @returns {any}
+ */
+function unpackObj(obj) {
+    if (obj == null) return obj;
+
+    // Arrays: recurse
+    if (Array.isArray(obj)) return unpackArray(obj);
+
+    // Non-object primitives: no change
+    if (typeof obj !== "object") return obj;
+
+    // Special object?
+    const kind = obj.serveObj;
+    switch (kind) {
+        case "closure": {
+            // obj.func is source code for the body; obj.params optional list of parameter names
+            // Preserving original intent: decode params then pass as param list.
+            const params = obj.params ? obj.params.map(unpackObj) : [];
+            return params.length ? new Function(...params, obj.func) : new Function(obj.func);
+        }
+
+        case "date":
+            return unpackJsonDate(obj);
+
+        case "varName":
+            return resolveFromWindow(obj.varName);
+
+        case "func": {
+            // Find target context from window, then call func on it
+            const target = obj.context ? resolveFromWindow(obj.context) : window;
+            const fn = target?.[obj.func];
+            if (typeof fn !== "function") return undefined;
+
+            const params = obj.params ? obj.params.map(unpackObj) : [];
+            return fn.apply(target, params);
+        }
+
+        default:
+            // Unknown discriminator: fall through to deep-unpack as plain object
+            break;
+    }
+
+
+    // Plain object: deep-unpack entries
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+        out[k] = unpackObj(v);
+    }
+    return out;
+}
+
+/**
+ * Unpacks a date object that was packed by dateTime.DateTime.MarshalJson. If the date represented a
+ * timestamp on the server side, it will be a timestamp here, but the time will be in local time.
+ * In other words, if the server timezone and browser timezone are different,
+ * then they will show different times, but both will correspond to the same world time.
+ * If on the server side the date represented simply a date and time in local time,
+ * the date will become the same date and time in local time here. If the server timezone and browser
+ * timezone are different, they will both show the same time, meaning they will not be the same world time.
+ * If it was a zero date on the server, it becomes a null here.
+ *
+ * This solves some problems inherent in the traditional JSON date format consisting of an ISO8601 string.
+ *
+ * @param {object} o
+ * @returns {null|Date}
+ */
+function unpackJsonDate(o) {
+    if (o.z) {
+        return null;
+    } else if (o.t) {
+        return new Date(Date.UTC(o.y, o.mo, o.d, o.h, o.m, o.s, o.ms));
+    } else {
+        return new Date(o.y, o.mo, o.d, o.h, o.m, o.s, o.ms);
     }
 }
 
