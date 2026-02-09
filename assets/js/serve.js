@@ -46,9 +46,6 @@ export function initForm() {
     trackChanges(frm)
 }
 
-
-// Change tracking
-
 /**
  * Records a change in a control.
  *
@@ -107,6 +104,28 @@ function trackChanges(frm) {
  * @property {number} [eventId]             The event id
  * @property {ActionValues} [actionValues]  Values to send with the event
  */
+
+/**
+ * Post via a submit.
+ *
+ * @param {ActionParams} params
+ **/
+function postBack (params) {
+    if (discardEvents) {
+        return;  // We are waiting for a response from the server
+    }
+
+    let frm = getForm();
+    let el = document.getElementById(hiddenInputPrefix + "params");
+    if (!el) return;
+    if (!frm) return;
+
+    el.value = encodePostParams(params)
+
+    // trigger our own form submission so we can catch it
+    trigger(frm, "submit");
+}
+
 
 /**
  * Posts an ajax call to the ajax queue. Ajax actions call this.
@@ -187,19 +206,25 @@ function ajaxFormData(params) {
         }
     }
 
-    for (const id of controlIdsToRefresh) {
-        fd.append(hiddenInputPrefix + "refresh", id);
-    }
-
-    // Always post timezone data
-    fd.set(hiddenInputPrefix + "tzo", String(-new Date().getTimezoneOffset()));
-    fd.set(hiddenInputPrefix + "tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
-
-    fd.set(hiddenInputPrefix + "params", JSON.stringify(params));
+    fd.set(hiddenInputPrefix + "params", encodePostParams(params));
 
     changedControlIds.clear();
     controlIdsToRefresh.clear();
     return fd;
+}
+
+/**
+ *
+ * @param {ActionParams} params
+ * @returns {string}
+ */
+function encodePostParams(params) {
+    let enc = {...params};
+    enc.tzo = -new Date().getTimezoneOffset();
+    enc.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    enc.refresh = [...controlIdsToRefresh];
+
+    return JSON.stringify(enc);
 }
 
 /**
@@ -481,18 +506,6 @@ async function processAjaxResponse(resp) {
         }
     }
 }
-
-
-/**
- * A parameter to send to a command. Could be values that cannot be normally
- * represented in json, such as a Date.
- *
- * @typedef {Object} AjaxResponseCommandParam
- * @property {string} objType     The type of a special data type.
- * @property {string} [func]      Javascript to execute.
- * @property {*[]} [params]       Function parameters.
- * @property {string} [varName]   Variable name.
- **/
 
 /**
  * Convert from JSON return values into richer JS values.
@@ -894,4 +907,16 @@ ${resultText}`);
  */
 export function blockEvents() {
     discardEvents = true;
+}
+
+/**
+ * Triggers a custom event with the given name.
+ *
+ * @param {HTMLElement} el
+ * @param {string} eventName
+ * @param {any} [extra]
+ */
+function trigger(el, eventName, extra) {
+    let event = new CustomEvent(eventName, {bubbles: true, cancelable: true, composed: true, detail: extra});
+    el.dispatchEvent(event);
 }

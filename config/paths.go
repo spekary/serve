@@ -1,10 +1,12 @@
 package config
 
-// AssetPath is the path prefix for all goradd assets. It indicates to the program to
+// AssetPath is the path prefix for all assets. It indicates to the program to
 // look for the given file in the assets collection of files
 // which in development mode is wherever the file is on the disk, and in release mode, the central asset directory where
-// all assets get copied. set to blank to turn off the default asset management.
+// all assets get copied.
 var AssetPath = "/assets/"
+
+var FrameworkSubPath = "serve"
 
 // WebsocketMessengerPath is the url prefix that indicates this is a Websocket call to our messenger service.
 //

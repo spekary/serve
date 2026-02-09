@@ -21,5 +21,5 @@ var a embed.FS
 
 func init() {
 	// The path below is the same path the assets should be copied to for deployment.
-	http.RegisterAssetDirectory(path.Join(config.AssetPath, "goradd"), a)
+	http.RegisterAssetDirectory(path.Join(config.AssetPath, config.FrameworkSubPath), a)
 }
