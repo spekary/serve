@@ -89,7 +89,7 @@ func (l *UnorderedList) DrawTag(ctx context.Context, w io.Writer) {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *UnorderedList) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "hlist")
+	a.SetData(page.ControlTypeDataAttribute, "hlist")
 	return a
 }
 

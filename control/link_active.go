@@ -69,7 +69,7 @@ func (l *ActiveLink) ActiveAttributes() html5tag.Attributes {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *ActiveLink) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "activelink")
+	a.SetData(page.ControlTypeDataAttribute, "activelink")
 	if l.isActive {
 		a.Merge(l.activeAttributes)
 	}

@@ -120,7 +120,7 @@ func (l *CheckboxList) SetRowClass(c string) CheckboxListI {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *CheckboxList) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "checkboxlist")
+	a.SetData(page.ControlTypeDataAttribute, "checkboxlist")
 	a.AddClass("gr-cbl")
 
 	if l.isScrolling {

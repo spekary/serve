@@ -102,7 +102,7 @@ func (c *FormFieldWrapper) Instructions() string {
 
 func (c *FormFieldWrapper) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "formField")
+	a.SetData(page.ControlTypeDataAttribute, "ffWrapper")
 	return a
 }
 

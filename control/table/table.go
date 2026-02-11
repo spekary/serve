@@ -235,7 +235,7 @@ func (t *Table) DrawTag(ctx context.Context, w io.Writer) {
 // data in the table.
 func (t *Table) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := t.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "table")
+	a.SetData(page.ControlTypeDataAttribute, "table")
 	if !t.HasData() && t.hideIfEmpty {
 		a.SetStyle("display", "none")
 	}

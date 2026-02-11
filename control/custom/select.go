@@ -95,7 +95,7 @@ func (t *SelectTable) RowAttributes(row int, data interface{}) (a html5tag.Attri
 // DrawingAttributes is called by the framework to style the table tag.
 func (t *SelectTable) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := t.Table.DrawingAttributes(ctx)
-	a.SetData("grctl", "selecttable")
+	a.SetData(page.ControlTypeDataAttribute, "selecttable")
 	a.Set("role", "listbox")
 	a.SetData("grWidget", "goradd.SelectTable")
 	if t.selectedID != "" {

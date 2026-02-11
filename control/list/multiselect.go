@@ -259,7 +259,7 @@ func (l *MultiselectList) DrawTag(ctx context.Context, w io.Writer) {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *MultiselectList) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "multilist")
+	a.SetData(page.ControlTypeDataAttribute, "multilist")
 	a.Set("name", l.ID()) // needed for posts
 	a.Set("multiple", "")
 	return a

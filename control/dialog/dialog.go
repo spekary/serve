@@ -137,7 +137,7 @@ func (d *Dialog) Title() string {
 // DrawingAttributes is called by the framework to set temporary attributes just before drawing.
 func (d *Dialog) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := d.Panel.DrawingAttributes(ctx)
-	a.SetData("grctl", "dialog")
+	a.SetData(page.ControlTypeDataAttribute, "dialog")
 	return a
 }
 

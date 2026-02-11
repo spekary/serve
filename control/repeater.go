@@ -78,7 +78,7 @@ func (r *Repeater) DrawTag(ctx context.Context, w io.Writer) {
 // data in the table.
 func (r *Repeater) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := r.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "repeater")
+	a.SetData(page.ControlTypeDataAttribute, "repeater")
 	return a
 }
 

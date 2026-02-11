@@ -30,7 +30,6 @@ func (c *Span) Init(self page.ControlI, parent page.ControlI, id string) {
 
 func (c *Span) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "span")
 	return a
 }
 

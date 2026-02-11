@@ -122,7 +122,8 @@ func (l *RadioList) SetRowClass(c string) RadioListI {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *RadioList) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "radiolist")
+	a.SetData(page.ControlTypeDataAttribute, "radiolist")
+
 	a.AddClass("gr-cbl")
 
 	if l.isScrolling {

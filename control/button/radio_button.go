@@ -64,7 +64,7 @@ func (c *RadioButton) SetChecked(v bool) RadioButtonI {
 // DrawingAttributes is called by the framework to create temporary attributes for the input tag.
 func (c *RadioButton) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.CheckboxBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "radio")
+	a.SetData(page.ControlTypeDataAttribute, "radio")
 	a.Set("type", "radio")
 	if c.group == "" {
 		a.Set("name", c.ID()) // treat it like a checkbox if no group is specified

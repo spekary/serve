@@ -61,7 +61,7 @@ func (c *Panel) this() PanelI {
 
 func (c *Panel) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := c.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "panel")
+	a.SetData(page.ControlTypeDataAttribute, "panel")
 	return a
 }
 

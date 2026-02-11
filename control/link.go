@@ -68,7 +68,7 @@ func (l *Link) SetDownload(filename string) LinkI {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *Link) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "link")
+	a.SetData(page.ControlTypeDataAttribute, "link")
 	return a
 }
 

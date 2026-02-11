@@ -170,7 +170,7 @@ func (l *SelectList) UnmarshalState(m page.SavedState) {
 // attributes are disposed of after drawing, so they are essentially read-only.
 func (l *SelectList) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := l.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "selectlist")
+	a.SetData(page.ControlTypeDataAttribute, "selectlist")
 	a.Set("name", l.ID()) // needed for posts
 	if l.IsRequired() {
 		a.Set("required", "") // required for some css frameworks, but browser validation is flaky.
