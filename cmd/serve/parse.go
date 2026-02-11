@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -126,6 +127,7 @@ func parse(outputPath string, files ...string) {
 func processFormFile(src []byte) []byte {
 	var templateBuffer bytes.Buffer
 	var creatorsBuffer bytes.Buffer
+	var gettersBuffer bytes.Buffer
 
 	title := extractTitle(src)
 	if title != "" {
@@ -151,9 +153,9 @@ func processFormFile(src []byte) []byte {
 	}
 
 	templateBuffer.WriteString("{{define template}}")
-	err = processBodyElements(z, &templateBuffer, &creatorsBuffer, "form")
+	err = processBodyElements(z, &templateBuffer, &creatorsBuffer, &gettersBuffer, "form")
 	if err != nil {
-		slog.Error("failed to processFormFile form", "Error", err)
+		slog.Error("failed to process form", "Error", err)
 		return nil
 	}
 	templateBuffer.WriteString("{{end template}}\n")
@@ -162,6 +164,11 @@ func processFormFile(src []byte) []byte {
 		templateBuffer.WriteString("\n{{define creators}}\n")
 		templateBuffer.Write(creatorsBuffer.Bytes())
 		templateBuffer.WriteString("\n{{end creators}}\n")
+	}
+	if gettersBuffer.Len() > 0 {
+		templateBuffer.WriteString("{{define getters}}\n")
+		templateBuffer.WriteString(gettersBuffer.String())
+		templateBuffer.WriteString("\n{{end getters}}\n")
 	}
 
 	templateBuffer.WriteString("\n{{renderFormTemplate}}\n")
@@ -221,6 +228,7 @@ func extractTitle(src []byte) string {
 func processBodyElements(z *stepper,
 	templateBuffer *bytes.Buffer,
 	creatorsBuffer *bytes.Buffer,
+	gettersBuffer *bytes.Buffer,
 	tag string) error {
 
 	var count = 1
@@ -234,7 +242,7 @@ Loop:
 
 		switch z.token.Type {
 		case html.SelfClosingTagToken:
-			err = processVoidElement(z, templateBuffer, creatorsBuffer)
+			err = processVoidElement(z, templateBuffer, creatorsBuffer, gettersBuffer)
 			if err != nil {
 				return err
 			}
@@ -242,7 +250,7 @@ Loop:
 		case html.StartTagToken:
 			if voidElements[z.token.Data] {
 				// html5 allows these to not look like self-closing tags, but still be treated as such
-				err = processVoidElement(z, templateBuffer, creatorsBuffer)
+				err = processVoidElement(z, templateBuffer, creatorsBuffer, gettersBuffer)
 				if err != nil {
 					return err
 				}
@@ -297,7 +305,11 @@ Loop:
 				if controlType != "" {
 					// control attribute specifies a control type. Put it in the control creators.
 					templateBuffer.WriteString(renderDrawControl(id, nil)) // move attribute setting to control creation
-					saveControlCreator(creatorsBuffer, controlType, id, attr)
+					err = saveControlCreator(creatorsBuffer, controlType, id, attr)
+					if err != nil {
+						return err
+					}
+					saveControlGetter(gettersBuffer, controlType, id)
 				} else {
 					templateBuffer.WriteString(renderDrawControl(id, attr)) // must go before findEndTag
 				}
@@ -311,7 +323,7 @@ Loop:
 				(translatableTags[z.token.Data] && !hasNoTranslate) {
 				// translate innerHtml
 				templateBuffer.WriteString(renderTag(z))
-				err = processBodyElements(z, templateBuffer, creatorsBuffer, z.token.Data) // recurse
+				err = processBodyElements(z, templateBuffer, creatorsBuffer, gettersBuffer, z.token.Data) // recurse
 				if err != nil {
 					return err
 				}
@@ -403,8 +415,9 @@ func processPanelHtml(z *stepper, panelObj string, tag string) error {
 	var b bytes.Buffer
 	var templateBuffer bytes.Buffer
 	var creatorsBuffer bytes.Buffer
+	var gettersBuffer bytes.Buffer
 
-	err := processBodyElements(z, &templateBuffer, &creatorsBuffer, tag)
+	err := processBodyElements(z, &templateBuffer, &creatorsBuffer, &gettersBuffer, tag)
 	if err != nil {
 		return err
 	}
@@ -420,6 +433,11 @@ func processPanelHtml(z *stepper, panelObj string, tag string) error {
 		b.WriteString("{{define creators}}")
 		b.WriteString(creatorsBuffer.String())
 		b.WriteString("{{end creators}}\n")
+	}
+	if gettersBuffer.Len() > 0 {
+		b.WriteString("{{define getters}}\n")
+		b.WriteString(gettersBuffer.String())
+		b.WriteString("\n{{end getters}}\n")
 	}
 
 	b.WriteString("{{renderPanel}}\n")
@@ -471,14 +489,19 @@ func renderAttributes(attributes []html.Attribute) string {
 
 func processVoidElement(z *stepper,
 	templateBuffer *bytes.Buffer,
-	creatorsBuffer *bytes.Buffer) error {
+	creatorsBuffer *bytes.Buffer,
+	gettersBuffer *bytes.Buffer,
+) error {
 	if v, ok := getAttributeValue(controlAttribute, z.token.Attr); ok {
 		if i, ok2 := getAttributeValue("id", z.token.Attr); !ok2 {
 			return errors.New("A " + controlAttribute + " control must have an id")
 		} else if v != "" {
 			// control attribute specifies a control type
 			templateBuffer.WriteString(renderDrawControl(i, nil)) // move attribute setting to control creation
-			saveControlCreator(creatorsBuffer, v, i, z.token.Attr)
+			if err := saveControlCreator(creatorsBuffer, v, i, z.token.Attr); err != nil {
+				return err
+			}
+			saveControlGetter(gettersBuffer, v, i)
 		} else {
 			templateBuffer.WriteString(renderDrawControl(i, z.token.Attr))
 		}
@@ -556,43 +579,62 @@ func renderTag(z *stepper) string {
 func saveControlCreator(creatorsBuffer *bytes.Buffer,
 	controlType string,
 	id string,
-	attr []html.Attribute) {
+	attr []html.Attribute) error {
 
 	if creatorsBuffer.Len() > 0 {
-		creatorsBuffer.WriteString("\n\n")
+		creatorsBuffer.WriteString("\n")
 	}
 
-	// controlType might have a package name
+	// controlType should have a package name
 	names := strings.Split(controlType, ".")
-	if len(names) == 2 {
-		creatorsBuffer.WriteString(names[0])
-		creatorsBuffer.WriteString(".New")
-		creatorsBuffer.WriteString(names[1])
-	} else {
-		creatorsBuffer.WriteString("New")
-		creatorsBuffer.WriteString(controlType)
+	if len(names) != 2 {
+		return fmt.Errorf("control type must have a package name: %s", controlType)
 	}
 
-	creatorsBuffer.WriteString("(")
-	creatorsBuffer.WriteString(`ctrl, "`)
+	creatorsBuffer.WriteString("{{creator ")
+	creatorsBuffer.WriteString(names[0])
+	creatorsBuffer.WriteString(", ")
+	creatorsBuffer.WriteString(names[1])
+	creatorsBuffer.WriteString(", ")
 	creatorsBuffer.WriteString(id)
-	creatorsBuffer.WriteString(`")`)
+	creatorsBuffer.WriteString("}}")
 
 	if _, ok := getAttributeValue(saveStateAttribute, attr); ok {
-		creatorsBuffer.WriteString(".\n\tSaveState(ctx, true)")
+		creatorsBuffer.WriteString("{{creator-savestate}}")
 	}
 	if v, ok := getAttributeValue(eventsAttribute, attr); ok {
 		events := strings.Split(v, ";")
 		for _, event := range events {
-			creatorsBuffer.WriteString(".\n\tOn(")
+			creatorsBuffer.WriteString("{{creator-event ")
 			creatorsBuffer.WriteString(event)
-			creatorsBuffer.WriteString(")")
+			creatorsBuffer.WriteString("}}")
 		}
 	}
 	a := renderAttributes(attr)
 	if a != "" {
-		creatorsBuffer.WriteString(".\n\tMergeAttributes(html5tag.Attributes{")
+		creatorsBuffer.WriteString("{{creator-attr `")
 		creatorsBuffer.WriteString(a)
-		creatorsBuffer.WriteString("})")
+		creatorsBuffer.WriteString("`}}")
 	}
+	return nil
+}
+
+func saveControlGetter(gettersBuffer *bytes.Buffer,
+	controlType string,
+	id string) {
+	if gettersBuffer.Len() > 0 {
+		gettersBuffer.WriteString("\n")
+	}
+
+	// controlType should have a package name
+	names := strings.Split(controlType, ".")
+
+	gettersBuffer.WriteString("{{getter ")
+	gettersBuffer.WriteString(id)
+	gettersBuffer.WriteString(", ")
+	gettersBuffer.WriteString(names[0])
+	gettersBuffer.WriteString(", ")
+	gettersBuffer.WriteString(names[1])
+	gettersBuffer.WriteString("}}")
+
 }

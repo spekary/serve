@@ -11,9 +11,9 @@
 }}
 {{define draw 2}}
 {{if `$2` == ""}}
-    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").Draw(ctx, _w) }}
+    {{g ctrl.Form().GetControl("$1").Draw(ctx, _w) }}
 {{else}}
-    {{g ctrl.Form().GetControl(ctrl.ID() + "$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
+    {{g ctrl.Form().GetControl("$1").MergeAttributes(html5tag.Attributes{$2}).Draw(ctx, _w) }}
 {{if}}
 {{end draw}}
 
@@ -144,12 +144,35 @@ func (ctrl *{{form}}) DrawTemplate(ctx context.Context, _w io.Writer) (err error
 
 // createTemplateControls creates the controls defined in the template.
 func (ctrl *{{form}}) createTemplateControls(ctx context.Context) {
-{{g
 {{put? creators}}
-}}
 }
 
+{{put? getters}}
+
 {{end renderFormTemplate}}
+
+{{define creator 3}}$1.New$2(ctrl, "$3"){{end creator}}
+{{define creator-attr 1}}.
+MergeAttributes(html5tag.Attributes{$1}){{end creator-attr}}
+{{define creator-savestate}}.
+SaveState(true){{end creator-savestate}}
+{{define creator-event}}.
+On($1){{end creator-event}}
+
+{{# call with id, package, controlType }}
+{{define getter 3}}
+func (ctrl *{{form}}) $1$3() *$2.$3 {
+    if i := ctrl.Form().GetControl("$1"); i != nil {
+        if c, ok := i.(*$2.$3); !ok {
+            panic(`control with id "$1" was not a $2.$3`)
+        } else {
+            return c
+        }
+    }
+    panic(`control not found: $1`)
+}
+{{end getter}}
+
 
 {{# renderControlTemplate renders the template for the given control type.
     Define the "control" macro as the control type that the template is attached to.

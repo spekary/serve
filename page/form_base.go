@@ -31,6 +31,8 @@ var CsrfError = errors.New("csrf error")
 // be overridden.
 type FormI interface {
 	ControlI
+
+	Init(self FormI, id string)
 	Page() *Page
 	GetControl(id string) (c ControlI)
 	SetGeneratedIdPrefix(prefix string)
@@ -158,7 +160,7 @@ func (f *FormBase) testCSRF(ctx context.Context, request *RequestContext) error 
 	csrf2, found := request.FormValue(HtmlCsrfToken)
 	if !found || csrf == "" || csrf != csrf2 {
 		log.Warn(ctx, logModule, "Cross-site request forgery attack detected",
-			"page_state", f.page.StateID(),
+			"page_id", f.page.StateID(),
 			"found", found,
 			"form_csrf", csrf,
 			"request_csrf", csrf2)

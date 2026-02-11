@@ -117,7 +117,7 @@ func (t *Textbox) ResetValidators() {
 // DrawingAttributes is called by the framework to retrieve the tag's private attributes at draw time.
 func (t *Textbox) DrawingAttributes(ctx context.Context) html5tag.Attributes {
 	a := t.ControlBase.DrawingAttributes(ctx)
-	a.SetData("grctl", "textbox")
+	a.SetData(page.ControlTypeDataAttribute, "textbox")
 	a.Set("name", t.ID()) // needed for posts
 	if t.IsRequired() {
 		a.Set("required", "")

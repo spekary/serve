@@ -31,6 +31,7 @@ const JsonObjectType = "objType"
 func ToJavaScript(v interface{}) string {
 	// TODO: Add some introspection to handle any kind of complex object that is a JavaScripter at the inner level
 	// TODO: This is a good place for Go 1.18 templates to expand on arrays of items.
+	// TODO: Use a string builder
 	switch s := v.(type) {
 	case JavaScripter:
 		return s.JavaScript()

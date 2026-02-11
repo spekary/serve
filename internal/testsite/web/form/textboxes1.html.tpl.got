@@ -1,0 +1,15 @@
+{{define title}}Textboxes 1{{end title}}
+{{define form}}TextboxesForm1{{end form}}
+{{define template}}
+<h1>{{tr `Textboxes 1` }}</h1>
+<label for="standard">{{tr `Standard` }}</label>{{draw standard }}
+{{end template}}
+
+{{define creators}}
+{{creator textbox, Textbox, standard}}{{creator-attr `"type":"text"`}}
+{{end creators}}
+{{define getters}}
+{{getter standard, textbox, Textbox}}
+{{end getters}}
+
+{{renderFormTemplate}}

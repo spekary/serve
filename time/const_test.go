@@ -1,9 +1,10 @@
 package time
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConst_Time(t *testing.T) {

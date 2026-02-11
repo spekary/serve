@@ -31,7 +31,7 @@ const sessionControlTypeState string = "goradd.controlType"
 const RequiredErrorMessage string = "A value is required"
 
 const ControlTypeDataPrefix = "srv"
-const ControlTypeDataAttribute = "srv-ctl"
+const ControlTypeDataAttribute = "srvCtl"
 
 // ValidationState is used internally by the framework to determine how the control's wrapper handles drawing validation error
 // messages. Different wrappers use it to set classes or attributes of the error message or the overall control.

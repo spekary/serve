@@ -49,6 +49,10 @@ func (s *stepper) findStartTag(tag string) error {
 		if err != nil {
 			return err
 		}
+		if s.token.Type == html.ErrorToken {
+			// EOF
+			return fmt.Errorf("start tag not found %s", tag)
+		}
 		if (s.token.Type == html.StartTagToken || s.token.Type == html.SelfClosingTagToken) &&
 			s.token.Data == tag {
 			return nil

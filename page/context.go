@@ -1,9 +1,7 @@
 package page
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 
 	http2 "github.com/goradd/serve/http"
@@ -44,8 +41,7 @@ const (
 const (
 	HtmlVarAction    = HiddenInputPrefix + "Action"
 	HtmlVarPagestate = HiddenInputPrefix + "PageState"
-	tzInputName      = HiddenInputPrefix + "tz"
-	tzoInputName     = HiddenInputPrefix + "tzo"
+	HtmlVarParams    = HiddenInputPrefix + "params"
 )
 
 // MultipartFormMax is the maximum size of a mult-part form that will be
@@ -106,12 +102,12 @@ type RequestContext struct {
 	NoJavaScript bool
 }
 
-// parseRequest processes the request, extracting information from the request and placing it
+// ParseRequest processes the request, extracting information from the request and placing it
 // into the returned context.
 // Per comments in the ResponseWriter, we need to read and process the entire request before attempting to write.
 // Generally, this shouldn't be a problem since we are buffering output.
 // By placing this information into a context, we avoid re-parsing and processing request data later.
-func parseRequest(r *http.Request) (ctx context.Context, err error) {
+func ParseRequest(r *http.Request) (ctx context.Context, err error) {
 	err = parseForm(r)
 	if err != nil {
 		return
@@ -238,7 +234,7 @@ func fillAppData(ctx context.Context, r *RequestContext) error {
 
 func processPageState(ctx context.Context, r *RequestContext) error {
 	var v string
-	v, _ = r.FormValue(tzInputName)
+	v, _ = r.FormValue(HtmlVarParams)
 	if v == "" {
 		// javascript is turned off
 		// we are in a minimalist environment, where only buttons submit forms
@@ -258,31 +254,26 @@ func processPageState(ctx context.Context, r *RequestContext) error {
 	} else {
 		r.requestMode = RequestModeServer
 	}
-	processTimezoneInfo(ctx, r)
 	return processPageParams(ctx, r, v)
 }
 
-func processTimezoneInfo(ctx context.Context, r *RequestContext) {
-	tz, _ := r.FormValue(tzInputName)
-	tzoString, _ := r.FormValue(tzoInputName)
-	tzo, err := strconv.Atoi(tzoString)
-	if err != nil {
-		slog.Warn("invalid TimezoneOffset string", "TimezoneOffset", tzoString)
-		return
-	}
+func processTimezoneInfo(ctx context.Context,
+	r *RequestContext,
+	timezone string,
+	timezoneOffset int) {
 
-	if tz != "" {
-		if tzo > 24*60 || tzo < -24*60 {
-			slog.Warn("TimezoneOffset is out of range", "TimezoneOffset", tzo)
+	if timezone != "" {
+		if timezoneOffset > 24*60 || timezoneOffset < -24*60 {
+			slog.Warn("TimezoneOffset is out of range", "TimezoneOffset", timezoneOffset)
 			return
 		}
-		r.clientTimezoneOffset = tzo
+		r.clientTimezoneOffset = timezoneOffset
 
-		if !strings2.IsASCII(tz) {
-			slog.Warn("invalid timezone name", "timezone", tz)
+		if !strings2.IsASCII(timezone) {
+			slog.Warn("invalid timezone name", "timezone", timezone)
 		}
 
-		r.clientTimezone = tz
+		r.clientTimezone = timezone
 		r.hasTimezoneInfo = true
 	} else if session.Has(ctx, session.TimezoneOffset) {
 		// recover previously set timezone from this session
@@ -295,18 +286,15 @@ func processTimezoneInfo(ctx context.Context, r *RequestContext) {
 
 func processPageParams(ctx context.Context, r *RequestContext, v string) error {
 	var params struct {
-		ControlID  string                 `json:"controlID"`
-		EventID    int                    `json:"EventID"`
-		Values     action.RawActionValues `json:"ActionValues"`
-		RefreshIDs []string               `json:"refresh"`
+		ControlID      string                 `json:"controlID"`
+		EventID        int                    `json:"eventID"`
+		Values         action.RawActionValues `json:"actionValues"`
+		RefreshIDs     []string               `json:"refresh"`
+		Timezone       string                 `json:"tz"`
+		TimezoneOffset int                    `json:"tzo"`
 	}
 
-	var dec *json.Decoder
-	if b, err := base64.StdEncoding.DecodeString(v); err != nil {
-		return fmt.Errorf("error decoding base64 value: %v, %w", v, err)
-	} else {
-		dec = json.NewDecoder(bytes.NewReader(b))
-	}
+	dec := json.NewDecoder(strings.NewReader(v))
 
 	dec.UseNumber()
 	dec.DisallowUnknownFields()
@@ -334,29 +322,11 @@ func processPageParams(ctx context.Context, r *RequestContext, v string) error {
 
 	// Values are validated when read
 	r.ActionValues = params.Values
-
-	if params.TimezoneInfo.TimezoneOffset != 0 || params.TimezoneInfo.Timezone != "" {
-		if params.TimezoneInfo.TimezoneOffset > 24*60 || params.TimezoneInfo.TimezoneOffset < -24*60 {
-			return fmt.Errorf("invalid timezone offset: %d", params.TimezoneInfo.TimezoneOffset)
-		}
-		r.clientTimezoneOffset = params.TimezoneInfo.TimezoneOffset
-
-		if !strings2.IsASCII(params.TimezoneInfo.Timezone) {
-			return fmt.Errorf("invalid timezone name: %s", params.TimezoneInfo.Timezone)
-		}
-
-		r.clientTimezone = params.TimezoneInfo.Timezone
-		r.hasTimezoneInfo = true
-	} else if session.Has(ctx, session.TimezoneOffset) {
-		// recover previously set timezone from this session
-		r.hasTimezoneInfo = true
-		r.clientTimezoneOffset = session.GetInt(ctx, session.TimezoneOffset)
-		r.clientTimezone = session.GetString(ctx, session.Timezone)
-	}
+	processTimezoneInfo(ctx, r, params.Timezone, params.TimezoneOffset)
 
 	// Save in a session for recovery when we have a session but do not have client info
-	session.SetInt(ctx, session.TimezoneOffset, params.TimezoneInfo.TimezoneOffset)
-	session.SetString(ctx, session.Timezone, params.TimezoneInfo.Timezone)
+	session.SetInt(ctx, session.TimezoneOffset, params.TimezoneOffset)
+	session.SetString(ctx, session.Timezone, params.Timezone)
 
 	var ok bool
 	if r.pageStateId, ok = r.FormValue(HtmlVarPagestate); !ok {
@@ -443,6 +413,6 @@ func NewMockContext() (ctx context.Context) {
 	ctx = sm.With(context.Background())
 
 	r := httptest.NewRequestWithContext(ctx, "", "/", nil)
-	ctx, _ = parseRequest(r)
+	ctx, _ = ParseRequest(r)
 	return ctx
 }

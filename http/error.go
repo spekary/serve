@@ -13,9 +13,6 @@ import (
 	"github.com/goradd/serve/log"
 )
 
-// MaxErrorStackDepth is the maximum stack depth reported to the error log when a panic happens.
-var MaxErrorStackDepth = 20
-
 // Error represents an error response to an http request.
 //
 // See http.Status* codes for status code constants
@@ -243,9 +240,9 @@ func WithErrorHandler(h http.Handler) http.Handler {
 				}
 				w.WriteHeader(http.StatusInternalServerError)
 				buf := ResetOutputBuffer(req.Context())
-				log.Error(req.Context(), logModule, "Error in handler stack",
+				log.Error(req.Context(), logModule, "panic",
 					slog.String("partial_output", string(buf)),
-					slog.String("trace", log.StackTrace(stackDepth, MaxErrorStackDepth)),
+					slog.String("trace", log.StackTrace(stackDepth, log.MaxErrorStackDepth)),
 					slog.Any("error", err))
 				_, _ = io.WriteString(w, newResponse) // Write the alternate response to client
 				return

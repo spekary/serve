@@ -10,14 +10,22 @@ import (
 
 type FormCreateFunc func() FormI
 
-var routes = make(map[string]FormCreateFunc) // maps paths to form info
+type registryEntry struct {
+	id string
+	f  FormCreateFunc
+}
 
-func RegisterForm(path string, createFunc FormCreateFunc) {
+var routes = make(map[string]registryEntry) // maps paths to form info
+
+func RegisterForm(path string, id string, createFunc FormCreateFunc) {
 	if path == "" {
 		panic(`you cannot register the empty path. If you want a default, register just a slash. ("/")`)
 	}
 	if _, ok := routes[path]; ok {
 		panic("a form for this path is already registered: " + path)
+	}
+	if id == "" {
+		panic("an id is required")
 	}
 	form := createFunc()
 
@@ -25,7 +33,7 @@ func RegisterForm(path string, createFunc FormCreateFunc) {
 		RegisterControl(func() ControlI { return createFunc() }) // a form is a control, and needs to be registered for the serializer
 	}
 
-	routes[path] = createFunc
+	routes[path] = registryEntry{id, createFunc}
 }
 
 func HasRoute(path string) bool {
@@ -37,17 +45,17 @@ func HasRoute(path string) bool {
 	return ok
 }
 
-func creationFunction(path string) FormCreateFunc {
+func creationInfo(path string) (string, FormCreateFunc) {
 	if path == "" {
 		path = "/"
 	}
 
-	f, _ := routes[path]
-	return f
+	e, _ := routes[path]
+	return e.id, e.f
 }
 
 func ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx, err := parseRequest(req)
+	ctx, err := ParseRequest(req)
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +67,7 @@ func ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		_, _ = io.WriteString(w, `{"loc":"reload"}`) // the refresh will be handled in javascript
 		return
 	}
-	
+
 	err = page.runPage(ctx, w)
 	if err != nil {
 		// TODO: remove this. All errors should panic in place so we can know where the problem is

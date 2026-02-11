@@ -81,7 +81,7 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 		log.Debug(ctx, "page", "Page stopped rendering")
 	}()
 	p.renderStatus = PageIsRendering
-	log.Debug(ctx, "page", "Page started rendering", "page_state", p.stateId)
+	log.Debug(ctx, "page", "Page started rendering", "page_id", p.stateId)
 
 	request := GetRequest(ctx)
 
@@ -91,12 +91,13 @@ func (p *Page) runPage(ctx context.Context, w http2.ResponseWriter) (err error) 
 	if p.form == nil {
 		// Create a new form and draw it after running through initial setup functions.
 		path := request.URL.Path
-		f := creationFunction(path)
+		id, f := creationInfo(path)
 		if f == nil {
 			panic("form not found for path: " + path)
 		}
 		p.form = f()
 		p.form.setPage(p)
+		p.form.Init(p.form, id)
 		p.form.SetupNewForm(ctx)
 		p.Draw(ctx, w)
 	} else {
